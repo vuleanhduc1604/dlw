@@ -374,6 +374,31 @@
   cursor: not-allowed;
 }
 
+/* MathQuill equation input */
+.qp-mathquill-field {
+  display: block;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 14px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  cursor: text;
+  box-sizing: border-box;
+}
+
+.qp-mathquill-field.mq-focused {
+  border-color: var(--primary-blue);
+  box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.1);
+}
+
+.qp-mathquill-disabled {
+  pointer-events: none;
+  opacity: 0.6;
+  background: var(--bg-tertiary);
+}
+
 .qp-model-answer {
   padding: 14px 16px;
   background: rgba(16, 185, 129, 0.06);
