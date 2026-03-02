@@ -46,6 +46,13 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _safe_int(value: object, default: int) -> int:
+    try:
+        return int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+
+
 def _build_chunk_text(sections: list[dict], chunk_begin: int, chunk_end: int) -> str:
     # CHUNKBEGIN/CHUNKEND are 1-based and inclusive.
     included = [
@@ -85,10 +92,13 @@ async def upload_slides(
         chunk_tokens = generate_chunks(slides_text, file_name=processed["filename"])
 
         chunks: list[ChunkResponse] = []
+        max_section_id = max((int(sec.get("section_id", 0)) for sec in processed["sections"]), default=1)
         for token in chunk_tokens:
             chunk_id = str(uuid4())
-            chunk_begin = int(token.get("CHUNKBEGIN", 1))
-            chunk_end = int(token.get("CHUNKEND", chunk_begin))
+            chunk_begin = _safe_int(token.get("CHUNKBEGIN"), 1)
+            chunk_end = _safe_int(token.get("CHUNKEND"), chunk_begin)
+            chunk_begin = max(1, min(chunk_begin, max_section_id))
+            chunk_end = max(chunk_begin, min(chunk_end, max_section_id))
             chunk_text = _build_chunk_text(processed["sections"], chunk_begin, chunk_end)
             summary = generate_summary(chunk_text) if chunk_text else ""
 
