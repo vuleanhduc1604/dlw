@@ -32,7 +32,7 @@ const QuizPage = {
           <div style="text-align:center;gap:12px;display:flex;flex-direction:column">
             <div style="font-size:2rem">⚠️</div>
             <div>No quiz session found.<br>Please open a quiz from the dashboard.</div>
-            <a href="index.html" style="color:#1d4ed8">← Back to dashboard</a>
+            <a href="quiz_setting.html" style="color:#1d4ed8">← Back to dashboard</a>
           </div>
         </div>`;
       return;
