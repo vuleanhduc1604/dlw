@@ -42,6 +42,7 @@ class Collections:
     processed_slides: str = "processed_slides"
     chunks: str = "chunks"
     past_quiz: str = "past_quiz"
+    attempts: str = "attempts"
     user_subject_metadata: str = "user_subject_metadata"
 
 
@@ -139,18 +140,31 @@ def upsert_raw_file(
     subject_id: str,
     file_id: str,
     file: Any,
+    filename: str | None = None,
+    file_type: str | None = None,
+    raw_text: str | None = None,
+    sections: list[dict[str, Any]] | None = None,
+    created_at: str | None = None,
 ) -> str:
+    payload: dict[str, Any] = {
+        "user_id": user_id,
+        "subject_id": subject_id,
+        "file_id": file_id,
+        "file": file,
+    }
+    if filename is not None:
+        payload["filename"] = filename
+    if file_type is not None:
+        payload["file_type"] = file_type
+    if raw_text is not None:
+        payload["raw_text"] = raw_text
+    if sections is not None:
+        payload["sections"] = sections
+    if created_at is not None:
+        payload["created_at"] = created_at
+
     doc_id = _doc_id(user_id, subject_id, file_id)
-    return upsert_doc(
-        COLL.raw_files,
-        doc_id,
-        {
-            "user_id": user_id,
-            "subject_id": subject_id,
-            "file_id": file_id,
-            "file": file,
-        },
-    )
+    return upsert_doc(COLL.raw_files, doc_id, payload)
 
 
 def get_raw_file(*, user_id: str, subject_id: str, file_id: str) -> Optional[dict[str, Any]]:
@@ -214,21 +228,28 @@ def upsert_chunk(
     chunk_begin: int,
     chunk_end: int,
     chunk_summary: str,
+    filename: str | None = None,
+    raw_text: str | None = None,
+    created_at: str | None = None,
 ) -> str:
+    payload: dict[str, Any] = {
+        "user_id": user_id,
+        "subject_id": subject_id,
+        "file_id": file_id,
+        "chunk_id": chunk_id,
+        "chunk_begin": int(chunk_begin),
+        "chunk_end": int(chunk_end),
+        "chunk_summary": chunk_summary,
+    }
+    if filename is not None:
+        payload["filename"] = filename
+    if raw_text is not None:
+        payload["raw_text"] = raw_text
+    if created_at is not None:
+        payload["created_at"] = created_at
+
     doc_id = _doc_id(user_id, subject_id, file_id, chunk_id)
-    return upsert_doc(
-        COLL.chunks,
-        doc_id,
-        {
-            "user_id": user_id,
-            "subject_id": subject_id,
-            "file_id": file_id,
-            "chunk_id": chunk_id,
-            "chunk_begin": int(chunk_begin),
-            "chunk_end": int(chunk_end),
-            "chunk_summary": chunk_summary,
-        },
-    )
+    return upsert_doc(COLL.chunks, doc_id, payload)
 
 
 def list_chunks(
@@ -299,6 +320,58 @@ def list_past_quiz(
 ) -> list[dict[str, Any]]:
     return query_docs(
         COLL.past_quiz,
+        filters=(
+            ("user_id", "==", user_id),
+            ("subject_id", "==", subject_id),
+        ),
+        limit_n=limit_n,
+    )
+
+
+def get_past_quiz_by_id(question_id: str) -> Optional[dict[str, Any]]:
+    return get_doc(COLL.past_quiz, question_id)
+
+
+def upsert_attempt(
+    *,
+    attempt_id: str,
+    user_id: str,
+    subject_id: str,
+    question_id: str,
+    file_id: str | None,
+    question_text: str,
+    options: list[str],
+    answer: str,
+    user_answer: str,
+    score: int,
+    question_type: str,
+    attempted_at: str,
+) -> str:
+    payload = {
+        "attempt_id": attempt_id,
+        "user_id": user_id,
+        "subject_id": subject_id,
+        "question_id": question_id,
+        "file_id": file_id,
+        "question_text": question_text,
+        "options": options,
+        "answer": answer,
+        "user_answer": user_answer,
+        "score": int(score),
+        "question_type": question_type,
+        "attempted_at": attempted_at,
+    }
+    return upsert_doc(COLL.attempts, attempt_id, payload)
+
+
+def list_attempts(
+    *,
+    user_id: str,
+    subject_id: str,
+    limit_n: int = 500,
+) -> list[dict[str, Any]]:
+    return query_docs(
+        COLL.attempts,
         filters=(
             ("user_id", "==", user_id),
             ("subject_id", "==", subject_id),

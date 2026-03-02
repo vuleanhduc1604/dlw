@@ -50,7 +50,7 @@ def split_into_sections(text: str, file_type: str) -> List[Dict]:
     sections = []
 
     if file_type == "pdf":
-        raw_sections = text.split("---PAGE_")
+        raw_sections = text.split("---PAGE_BREAK---")
     elif file_type == "pptx":
         raw_sections = text.split("---SLIDE_")
     else:

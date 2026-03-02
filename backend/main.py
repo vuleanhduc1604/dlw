@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from .ai_routes import router as core_router
+
 app = FastAPI(title="dlw-backend")
 
 # Allow local frontend during development.
@@ -11,6 +13,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(core_router)
 
 
 @app.get("/health")

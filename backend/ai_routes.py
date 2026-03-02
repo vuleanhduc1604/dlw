@@ -1,199 +1,361 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File
-from pydantic import BaseModel, Field
-from typing import List
-import uuid
+from __future__ import annotations
 
-from .ai_service import generate_chunks, generate_quiz_modular, grade_quiz, generate_summary
-from firebase_utils import (
-    upsert_raw_file,
-    upsert_processed_slide,
-    list_processed_slides,
-    upsert_chunk,
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
+
+from .ai_service import (
+    generate_chunks,
+    generate_quiz_modular,
+    generate_summary,
+    grade_nonmcq_quiz,
+)
+from .document_processor import process_uploaded_file
+from .firebase_utils import (
+    COLL,
+    get_past_quiz_by_id,
+    get_raw_file,
+    list_attempts,
     list_chunks,
-    add_past_quiz,
-    list_past_quiz, get_raw_file, query_docs, COLL, get_next_file_index,
+    query_docs,
+    upsert_attempt,
+    upsert_chunk,
+    upsert_doc,
+    upsert_raw_file,
+)
+from .schemas import (
+    AnalyticsSummary,
+    AttemptDetail,
+    AttemptResponse,
+    ChunkResponse,
+    FileDetail,
+    FileSummary,
+    FileUploadResponse,
+    GenerateQuizRequest,
+    QuestionDetail,
+    QuestionResponse,
+    QuestionRaw,
+    SubmitAnswerRequest,
 )
 
 router = APIRouter(tags=["core"])
 
 
-class QuizRequest(BaseModel):
-    slide_id: str
-    chunk_index: int
-    topic_type: str = "Theory"
-    format_type: str = "MCQ"
-    model_name: str = "gpt-4o-mini"
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
-class GradeRequest(BaseModel):
-    question_id: str
-    user_answer: str
-    time_start : str
-    time_end : str
-    question_type: str = "MCQ"
-    model_name: str = "gpt-4o-mini"
+def _build_chunk_text(sections: list[dict], chunk_begin: int, chunk_end: int) -> str:
+    # CHUNKBEGIN/CHUNKEND are 1-based and inclusive.
+    included = [
+        sec for sec in sections if chunk_begin <= int(sec.get("section_id", 0)) <= chunk_end
+    ]
+    return "\n\n".join(
+        f"Section {sec.get('section_id', '')}:\n{sec.get('content', '')}" for sec in included
+    ).strip()
 
 
-@router.get("/health")
-def health_check():
-    return {"status": "ok"}
-
-
-@router.post("/slides")
-async def upload_slides(user_id: str, subject_id: str, file: UploadFile = File(...)):
+@router.post("/slides", response_model=FileUploadResponse)
+async def upload_slides(
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+    file: UploadFile = File(...),
+):
     try:
-        content = await file.read()
-        slides_text = content.decode("utf-8")
-        # Compute the next index for this filename + user + subject
-        index = get_next_file_index(
+        processed = await process_uploaded_file(file)
+        file_id = str(uuid4())
+        created_at = _utc_now_iso()
+
+        upsert_raw_file(
             user_id=user_id,
             subject_id=subject_id,
-            filename_prefix=file.filename
+            file_id=file_id,
+            file=processed["raw_text"],
+            filename=processed["filename"],
+            file_type=processed["file_type"],
+            raw_text=processed["raw_text"],
+            sections=processed["sections"],
+            created_at=created_at,
         )
 
-        # Generate unique file_id
-        file_id = f"{file.filename}_{index}"
+        slides_text = "\n\n".join(
+            f"Slide {sec['section_id']}:\n{sec['content']}" for sec in processed["sections"]
+        )
+        chunk_tokens = generate_chunks(slides_text, file_name=processed["filename"])
 
-        # 1️⃣ Save raw file
-        upsert_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id, file=slides_text)
+        chunks: list[ChunkResponse] = []
+        for token in chunk_tokens:
+            chunk_id = str(uuid4())
+            chunk_begin = int(token.get("CHUNKBEGIN", 1))
+            chunk_end = int(token.get("CHUNKEND", chunk_begin))
+            chunk_text = _build_chunk_text(processed["sections"], chunk_begin, chunk_end)
+            summary = generate_summary(chunk_text) if chunk_text else ""
 
-        # 2️⃣ Generate structured chunks
-        parsed_chunks = generate_chunks(slides_text, file_name=file.filename)
-        enriched_chunks = []
-
-        for idx, chunk in enumerate(parsed_chunks):
-            chunk_text = chunk.get("content", "")
-            summary = generate_summary(chunk_text, model_name="gpt-4o-mini")
-            chunk_id = str(uuid.uuid4())
             upsert_chunk(
                 user_id=user_id,
                 subject_id=subject_id,
                 file_id=file_id,
                 chunk_id=chunk_id,
-                chunk_begin=chunk.get("start", 0),
-                chunk_end=chunk.get("end", len(chunk_text)),
-                chunk_summary=summary.strip(),
+                chunk_begin=chunk_begin,
+                chunk_end=chunk_end,
+                chunk_summary=summary,
+                filename=processed["filename"],
+                raw_text=chunk_text,
+                created_at=created_at,
             )
-            enriched_chunks.append({
-                "chunk_id": chunk_id,
-                "content": chunk_text,
-                "summary": summary.strip()
-            })
 
-        return {"file_id": file_id, "filename": file.filename, "chunks": enriched_chunks}
+            chunks.append(
+                ChunkResponse(
+                    chunk_id=chunk_id,
+                    file_id=file_id,
+                    filename=processed["filename"],
+                    chunk_begin=chunk_begin,
+                    chunk_end=chunk_end,
+                    summary=summary,
+                )
+            )
 
+        return FileUploadResponse(
+            slide_id=file_id,
+            filename=processed["filename"],
+            file_type=processed["file_type"],
+            chunks=chunks,
+        )
+    except HTTPException:
+        raise
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get("/slides")
-def get_all_slides(user_id: str = "default_user", subject_id: str = "default_subject"):
+@router.get("/slides", response_model=list[FileSummary])
+def get_all_slides(
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    rows = query_docs(
+        COLL.raw_files,
+        filters=(("user_id", "==", user_id), ("subject_id", "==", subject_id)),
+    )
+    return [
+        FileSummary(
+            file_id=row.get("file_id", ""),
+            filename=row.get("filename", row.get("file_id", "")),
+            file_type=row.get("file_type", "txt"),
+            created_at=row.get("created_at", ""),
+        )
+        for row in rows
+    ]
+
+
+@router.get("/slides/{slide_id}", response_model=FileDetail)
+def get_slide(
+    slide_id: str,
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Slide not found")
+
+    chunk_rows = list_chunks(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    chunks = [
+        ChunkResponse(
+            chunk_id=c.get("chunk_id", c.get("id", "")),
+            file_id=slide_id,
+            filename=c.get("filename", row.get("filename", slide_id)),
+            chunk_begin=int(c.get("chunk_begin", 0)),
+            chunk_end=int(c.get("chunk_end", 0)),
+            summary=c.get("chunk_summary", ""),
+        )
+        for c in chunk_rows
+    ]
+
+    return FileDetail(
+        file_id=slide_id,
+        filename=row.get("filename", slide_id),
+        file_type=row.get("file_type", "txt"),
+        created_at=row.get("created_at", ""),
+        chunks=chunks,
+    )
+
+
+@router.post("/quiz/generate", response_model=QuestionResponse)
+def generate_quiz(
+    payload: GenerateQuizRequest,
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
     try:
-        files = list_processed_slides(user_id=user_id, subject_id=subject_id, file_id="")
-        return {"slides": files}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.get("/slides/{file_id}")
-def get_slide(file_id: str, user_id: str = "default_user", subject_id: str = "default_subject"):
-    try:
-        slides = list_processed_slides(user_id=user_id, subject_id=subject_id, file_id=file_id)
-        if not slides:
-            raise HTTPException(status_code=404, detail="Slide not found")
-        return {"slides": slides}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post("/quiz/generate")
-def generate_quiz(payload: QuizRequest, user_id: str = "default_user", subject_id: str = "default_subject"):
-    try:
-        # fetch the chunk from database
-        chunks = list_chunks(user_id=user_id, subject_id=subject_id, file_id=payload.slide_id)
-        if payload.chunk_index >= len(chunks):
-            raise HTTPException(status_code=404, detail="Chunk not found")
-        chunk_text = chunks[payload.chunk_index]["chunk_summary"]
-
         raw = generate_quiz_modular(
-            chunk_text,
+            payload.chunk_text,
             payload.topic_type,
             payload.format_type,
             payload.model_name,
         )
+        question_id = str(uuid4())
+        created_at = _utc_now_iso()
 
-        question_id = str(uuid.uuid4())
-        # save to past_quiz as a temporary placeholder (without user answer)
-        add_past_quiz(
-            user_id=user_id,
-            subject_id=subject_id,
-            citation=[(chunks[payload.chunk_index]["chunk_id"], payload.slide_id)],
-            question=raw,
-            options=[],
-            answer="",  # you can add real answer after generation
-            user_answer="",
-            score=0,
-        )
-
-        return {"question_id": question_id, "raw": raw}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.post("/quiz/answer")
-def answer_quiz(payload: GradeRequest, user_id: str = "default_user", subject_id: str = "default_subject"):
-    try:
-        # fetch the question from past_quiz
-        quizzes = list_past_quiz(user_id=user_id, subject_id=subject_id)
-        quiz = next((q for q in quizzes if q.get("id") == payload.question_id), None)
-        if not quiz:
-            raise HTTPException(status_code=404, detail="Question not found")
-
-        score = grade_quiz(
-            quiz["question"],
-            payload.user_answer,
-            payload.question_type,
-            payload.model_name,
-        )
-
-        # update the past_quiz with user answer and score
-        add_past_quiz(
-            user_id=user_id,
-            subject_id=subject_id,
-            citation=quiz["citation"],
-            question=quiz["question"],
-            options=quiz.get("options", []),
-            answer=quiz.get("answer", ""),
-            user_answer=payload.user_answer,
-            score=score,
-        )
-
-        return {"score": score}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@router.get("/questions")
-def get_all_questions(user_id: str = "default_user", subject_id: str = "default_subject"):
-    try:
-        quizzes = list_past_quiz(user_id=user_id, subject_id=subject_id)
-        return {"questions": quizzes}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-@router.get("/file/{file_id}")
-def get_file(file_id: str, user_id: str = "default_user", subject_id: str = "default_subject"):
-    try:
-        file_doc = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
-        if not file_doc:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        return {
-            "file_id": file_doc["file_id"],
-            "user_id": file_doc["user_id"],
-            "subject_id": file_doc["subject_id"],
-            "file_content": file_doc["file"],
+        question_doc = {
+            "question_id": question_id,
+            "user_id": user_id,
+            "subject_id": subject_id,
+            "file_id": payload.file_id or "",
+            "chunk_id": payload.chunk_id,
+            "question_text": raw.get("question_text", ""),
+            "options": raw.get("options", []),
+            "answer": raw.get("answer") or "",
+            "format_type": payload.format_type,
+            "topic_type": payload.topic_type,
+            "metadata": raw.get("metadata", {}),
+            "created_at": created_at,
         }
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+        upsert_doc(COLL.past_quiz, question_id, question_doc)
 
+        return QuestionResponse(
+            question_id=question_id,
+            raw=QuestionRaw(
+                metadata=raw.get("metadata", {}),
+                question_text=raw.get("question_text", ""),
+                options=raw.get("options", []),
+                answer=raw.get("answer"),
+            ),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/quiz/answer", response_model=AttemptResponse)
+def answer_quiz(
+    payload: SubmitAnswerRequest,
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    question = get_past_quiz_by_id(payload.question_id)
+    if not question:
+        raise HTTPException(status_code=404, detail="Question not found")
+
+    if payload.question_type in {"MCQ", "TF", "MULTI"}:
+        score = 10 if payload.user_answer == question.get("answer", "") else 0
+    else:
+        score = grade_nonmcq_quiz(
+            question=question.get("question_text", ""),
+            correct_answer=question.get("answer", ""),
+            user_answer=payload.user_answer,
+            model_name=payload.model_name,
+        )
+
+    attempt_id = str(uuid4())
+    upsert_attempt(
+        attempt_id=attempt_id,
+        user_id=user_id,
+        subject_id=subject_id,
+        question_id=payload.question_id,
+        file_id=payload.file_id or question.get("file_id"),
+        question_text=question.get("question_text", ""),
+        options=question.get("options", []),
+        answer=question.get("answer", ""),
+        user_answer=payload.user_answer,
+        score=score,
+        question_type=payload.question_type,
+        attempted_at=_utc_now_iso(),
+    )
+
+    return AttemptResponse(attempt_id=attempt_id, question_id=payload.question_id, score=score)
+
+
+@router.get("/questions/{question_id}", response_model=QuestionDetail)
+def get_question_detail(question_id: str):
+    row = get_past_quiz_by_id(question_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Question not found")
+    return QuestionDetail(
+        question_id=row.get("question_id", row.get("id", "")),
+        file_id=row.get("file_id", ""),
+        chunk_id=row.get("chunk_id"),
+        question_text=row.get("question_text", ""),
+        options=row.get("options", []),
+        answer=row.get("answer", ""),
+        format_type=row.get("format_type", "MCQ"),
+        topic_type=row.get("topic_type", "Theory"),
+        metadata=row.get("metadata", {}),
+        created_at=row.get("created_at", ""),
+    )
+
+
+@router.get("/questions", response_model=list[QuestionDetail])
+def get_all_questions(
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    rows = query_docs(
+        COLL.past_quiz,
+        filters=(("user_id", "==", user_id), ("subject_id", "==", subject_id)),
+    )
+    return [
+        QuestionDetail(
+            question_id=r.get("question_id", r.get("id", "")),
+            file_id=r.get("file_id", ""),
+            chunk_id=r.get("chunk_id"),
+            question_text=r.get("question_text", ""),
+            options=r.get("options", []),
+            answer=r.get("answer", ""),
+            format_type=r.get("format_type", "MCQ"),
+            topic_type=r.get("topic_type", "Theory"),
+            metadata=r.get("metadata", {}),
+            created_at=r.get("created_at", ""),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/attempts", response_model=list[AttemptDetail])
+def get_attempts(
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    rows = list_attempts(user_id=user_id, subject_id=subject_id)
+    return [
+        AttemptDetail(
+            attempt_id=r.get("attempt_id", r.get("id", "")),
+            question_id=r.get("question_id", ""),
+            file_id=r.get("file_id"),
+            question_text=r.get("question_text", ""),
+            options=r.get("options", []),
+            answer=r.get("answer", ""),
+            user_answer=r.get("user_answer", ""),
+            score=int(r.get("score", 0)),
+            question_type=r.get("question_type", "MCQ"),
+            attempted_at=r.get("attempted_at", ""),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/analytics", response_model=AnalyticsSummary)
+def get_analytics(
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    attempts = list_attempts(user_id=user_id, subject_id=subject_id)
+    questions = query_docs(
+        COLL.past_quiz,
+        filters=(("user_id", "==", user_id), ("subject_id", "==", subject_id)),
+    )
+    files = query_docs(
+        COLL.raw_files,
+        filters=(("user_id", "==", user_id), ("subject_id", "==", subject_id)),
+    )
+
+    scores = [int(a.get("score", 0)) for a in attempts]
+    total_attempts = len(attempts)
+    avg_score = (sum(scores) / total_attempts) if total_attempts else 0.0
+    best_score = max(scores) if scores else 0
+
+    return AnalyticsSummary(
+        total_attempts=total_attempts,
+        avg_score=avg_score,
+        best_score=best_score,
+        total_questions_generated=len(questions),
+        total_files_uploaded=len(files),
+    )

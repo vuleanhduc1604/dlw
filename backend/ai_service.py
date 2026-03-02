@@ -1,9 +1,9 @@
 import os
 import re
 from collections import defaultdict
-from typing import Tuple, Dict
+from typing import Any, Dict, Tuple
 from openai import OpenAI
-from prompts import build_chunk_request, build_quiz_prompt, build_grade_prompt
+from .prompts import build_chunk_request, build_quiz_prompt, build_grade_prompt
 from dotenv import load_dotenv
 
 
@@ -48,7 +48,7 @@ def parse_sections(text: str, section_name: str, repeatable: bool = False):
     return matches[0].strip() if matches else None
 
 
-def parse_metadata(section_text: str) -> Tuple[Dict[str, any], str]:
+def parse_metadata(section_text: str) -> Tuple[Dict[str, Any], str]:
     """
     Parses <<TOKEN:VALUE>> or <<!TOKEN:VALUE>> metadata from a section, and returns
     both the metadata dict and the leftover text.
@@ -155,9 +155,6 @@ def generate_quiz_modular(
         prompt=prompt,
         model_name=model_name,
     )
-
-    print(response)
-    print()
 
     # Get the single QUESTION section
     q_sec = parse_sections(response, "QUESTION", repeatable=False)
