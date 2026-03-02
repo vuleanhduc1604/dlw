@@ -31,6 +31,36 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
+/* ── MathQuill input field for math answers ── */
+function MathQuillInput({ value, disabled, onChange }) {
+  const containerRef = useRef(null);
+  const mqRef = useRef(null);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || !window.MathQuill) return;
+    const MQ = window.MathQuill.getInterface(2);
+    const mq = MQ.MathField(el, {
+      handlers: {
+        edit: () => onChange(mq.latex()),
+      },
+    });
+    if (value) mq.latex(value);
+    mqRef.current = mq;
+    return () => {
+      mqRef.current = null;
+      el.innerHTML = '';
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <span
+      ref={containerRef}
+      className={`qp-mathquill-field${disabled ? ' qp-mathquill-disabled' : ''}`}
+    />
+  );
+}
+
 export default function QuizPage({ quizMeta, settings, questions, onExit }) {
   const [current, setCurrent] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
@@ -298,17 +328,16 @@ export default function QuizPage({ quizMeta, settings, questions, onExit }) {
     }
 
     /* TEXT — short answer */
+    //  add mathquill support latex if needed
     const uaText = typeof ua === 'string' ? ua : '';
     return (
       <div className="qp-text-wrap">
         <div className="qp-text-label">Your answer</div>
-        <textarea
-          className="qp-text-input"
+        <MathQuillInput
+          key={q.id}
           value={uaText}
           disabled={submitted}
-          placeholder="Type your answer here…"
-          rows={4}
-          onChange={e => !submitted && setAnswer(q.id, e.target.value)}
+          onChange={val => setAnswer(q.id, val)}
         />
         {submitted && (
           <div className="qp-model-answer">
