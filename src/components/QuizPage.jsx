@@ -61,7 +61,7 @@ function MathQuillInput({ value, disabled, onChange }) {
   );
 }
 
-export default function QuizPage({ quizMeta, settings, questions, onExit }) {
+export default function QuizPage({ quizMeta, settings, questions, onExit, userId = 'default_user', subjectId = 'default_subject' }) {
   const [current, setCurrent] = useState(0);
   const [userAnswers, setUserAnswers] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -197,6 +197,9 @@ export default function QuizPage({ quizMeta, settings, questions, onExit }) {
             question.id,
             userAnswer,
             question.type,
+            null,
+            userId,
+            subjectId,
           );
           const score = Number(result?.score ?? 0);
           const scaledScore = (score / 10) * pointsPerQuestion;
@@ -295,7 +298,7 @@ export default function QuizPage({ quizMeta, settings, questions, onExit }) {
     }
 
     if (q.type === 'MULTI') {
-      const sel = Array.isArray(ua) ? ua : [];
+      const sel = Array.isArray(ua) ? ua : (ua ? String(ua).split('').map(Number) : []);
       const cor = Array.isArray(q.answer) ? q.answer : [q.answer];
       return (
         <div className="qp-options">

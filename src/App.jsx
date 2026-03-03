@@ -127,6 +127,8 @@ const App = () => {
         quizMeta={quizWindowData.quizMeta}
         settings={quizWindowData.settings}
         questions={quizWindowData.questions}
+        userId={quizWindowData.userId ?? 'default_user'}
+        subjectId={quizWindowData.subjectId ?? 'default_subject'}
         onExit={() => window.close()}
       />
     );
@@ -212,7 +214,7 @@ const App = () => {
         {activeTab === 'analytics' && (
           sessionsLoading
             ? <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
-            : <AnalyticsPage />
+            : <AnalyticsPage userId={user.uid} subjectId={String(currentSessionId)} />
         )}
       </main>
     </div>

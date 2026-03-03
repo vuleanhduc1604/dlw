@@ -29,8 +29,8 @@ function percent(n) {
   return `${Math.round(n)}%`;
 }
 
-export default function AnalyticsPage() {
-  const { data, loading, error } = useUserAnalytics();
+export default function AnalyticsPage({ userId = 'default_user', subjectId = 'default_subject' }) {
+  const { data, loading, error } = useUserAnalytics(userId, subjectId);
 
   const [dateRange, setDateRange] = useState("7d");
   const [fileId, setFileId] = useState("all");

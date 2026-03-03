@@ -73,7 +73,7 @@ export default function QuizSettings({ session, userId = 'default_user' }) {
       questions = buildQuestions(getAllMockQuestions(), settings);
     }
 
-    sessionStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify({ quizMeta, settings, questions }));
+    sessionStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify({ quizMeta, settings, questions, userId, subjectId: String(session?.id ?? 'default_subject') }));
 
     const features = [
       "width=1280", "height=860",
