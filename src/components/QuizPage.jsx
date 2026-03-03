@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import '../styles/QuizPage.css';
 import { QUIZ_RESULTS_KEY } from '../utils/quizData';
-import { gradeAnswer } from '../utils/api';
+import { gradeAnswer, API_BASE } from '../utils/api';
 
 const TYPE_LABELS = {
   MCQ: 'Multiple Choice',
@@ -31,8 +31,69 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
-function openSlideViewer(question) {
-  const { slideText, slideNums, reference } = question;
+function openSlideViewer(question, userId = 'default_user', subjectId = 'default_subject') {
+  const { fileId, slideNums, slideText, reference } = question;
+
+  // If the original file is available, embed it in an iframe
+  if (fileId) {
+    const targetPage = slideNums?.length > 0
+      ? Math.min(...slideNums.map(Number).filter(n => !isNaN(n)))
+      : 1;
+
+    const fileUrl = `${API_BASE}/slides/${encodeURIComponent(fileId)}/file`
+      + `?user_id=${encodeURIComponent(userId)}&subject_id=${encodeURIComponent(subjectId)}`;
+
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${reference ?? 'Slide Viewer'}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;display:flex;flex-direction:column;height:100vh}
+    header{background:#1d4ed8;color:#fff;padding:10px 20px;font-size:13px;font-weight:600;flex-shrink:0;display:flex;align-items:center;gap:10px}
+    .badge{background:rgba(255,255,255,.2);border-radius:6px;padding:2px 10px;font-size:12px}
+    iframe{flex:1;border:none;width:100%;display:block}
+    .fallback{color:#94a3b8;text-align:center;padding:40px 20px;font-size:14px}
+    .fallback a{color:#60a5fa}
+  </style>
+</head>
+<body>
+  <header>
+    <span>&#128204; ${reference ?? 'Slide Reference'}</span>
+    <span class="badge">Page ${targetPage}</span>
+  </header>
+  <iframe
+    id="pdfFrame"
+    src="${fileUrl}#page=${targetPage}"
+    title="${reference ?? 'Slide Reference'}"
+  ></iframe>
+  <script>
+    const frame = document.getElementById('pdfFrame');
+    frame.onerror = function() {
+      frame.style.display = 'none';
+      const d = document.createElement('div');
+      d.className = 'fallback';
+      d.innerHTML = '<p>Could not embed file. <a href="${fileUrl}" target="_blank">Open file directly</a></p>';
+      document.body.appendChild(d);
+    };
+  <\/script>
+</body>
+</html>`;
+
+    const win = window.open(
+      '',
+      '_blank',
+      'width=960,height=780,left=80,top=60,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes',
+    );
+    if (win) {
+      win.document.write(html);
+      win.document.close();
+    }
+    return;
+  }
+
+  // Fallback: render extracted text when no file is stored on disk
   if (!slideText) return;
 
   const targetSlide = slideNums?.length > 0
@@ -516,7 +577,7 @@ export default function QuizPage({ quizMeta, settings, questions, onExit, userId
             {submitted && q.reference && (
               <button
                 className="qp-reference"
-                onClick={() => openSlideViewer(q)}
+                onClick={() => openSlideViewer(q, userId, subjectId)}
                 title="View source slides"
               >
                 ↗ {q.reference}

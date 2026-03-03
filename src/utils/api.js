@@ -128,7 +128,7 @@ export async function gradeAnswer(
  *   MULTI → format_type "MCQ"  → treated as MCQ in frontend
  *   TEXT  → format_type "TEXT" → string answer
  */
-export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = null) {
+export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = null, fileId = null) {
   const { question_id, raw } = apiRes;
   const { question_text, options = [], answer, metadata } = raw;
 
@@ -141,8 +141,12 @@ export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = nu
     finalOptions = ['True', 'False'];
     const idx = parseInt(answer, 10);
     finalAnswer = isNaN(idx) ? 0 : Math.min(idx, 1);
+  } else if (settingsType === 'MULTI') {
+    // Backend returns digit-concatenated string like "024" → parse to [0, 2, 4]
+    const str = typeof answer === 'string' ? answer : String(answer ?? '');
+    finalAnswer = str.split('').map(Number).filter((n) => !isNaN(n));
   } else {
-    // MCQ or MULTI — answer is a numeric index from the backend
+    // MCQ — answer is a single numeric index
     const idx = parseInt(answer, 10);
     finalAnswer = isNaN(idx) ? 0 : idx;
   }
@@ -175,6 +179,7 @@ export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = nu
     text: question_text || 'Question unavailable',
     options: finalOptions,
     answer: finalAnswer,
+    ...(fileId !== null && { fileId }),
     ...(reference !== undefined && { reference }),
     ...(slideNums !== null && { slideNums }),
     ...(chunk?.raw_text && { slideText: chunk.raw_text }),

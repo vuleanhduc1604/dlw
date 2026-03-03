@@ -1,10 +1,16 @@
 from __future__ import annotations
 
+import mimetypes
 import traceback
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response
+
+_FILES_DIR = Path("/tmp/dlw_files")
+_FILES_DIR.mkdir(parents=True, exist_ok=True)
 
 from .ai_service import (
     generate_chunks,
@@ -109,6 +115,11 @@ async def upload_slides(
             sections=processed["sections"],
             created_at=created_at,
         )
+
+        # Persist raw bytes to disk so we can serve the original file later
+        file_ext = processed["file_type"]
+        disk_path = _FILES_DIR / f"{file_id}.{file_ext}"
+        disk_path.write_bytes(processed["file_bytes"])
 
         stage = "generate_chunks"
         print(
@@ -233,6 +244,36 @@ def get_slide(
         file_type=row.get("file_type", "txt"),
         created_at=row.get("created_at", ""),
         chunks=chunks,
+    )
+
+
+@router.get("/slides/{slide_id}/file")
+def get_slide_file(
+    slide_id: str,
+    user_id: str = Query(default="default_user"),
+    subject_id: str = Query(default="default_subject"),
+):
+    """Serve the original uploaded file so the frontend can embed it."""
+    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Slide not found")
+
+    file_type = row.get("file_type", "pdf")
+    disk_path = _FILES_DIR / f"{slide_id}.{file_type}"
+
+    if not disk_path.exists():
+        raise HTTPException(status_code=404, detail="File not available on disk (may have been uploaded before this feature was added)")
+
+    file_bytes = disk_path.read_bytes()
+    mime_type = mimetypes.types_map.get(f".{file_type}", "application/octet-stream")
+
+    return Response(
+        content=file_bytes,
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{row.get("filename", slide_id)}"',
+            "Cache-Control": "private, max-age=3600",
+        },
     )
 
 

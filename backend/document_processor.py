@@ -115,5 +115,6 @@ async def process_uploaded_file(file: UploadFile) -> Dict:
         "filename": filename,
         "file_type": file_ext,
         "raw_text": cleaned_text,
-        "sections": sections
+        "sections": sections,
+        "file_bytes": file_bytes,
     }
