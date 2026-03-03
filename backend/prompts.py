@@ -2,7 +2,7 @@ CHUNK_PROMPT = """
 You are an AI that converts slides into logical content units.
 
 Instructions:
-- For each slide, reason and decide which "chunk" it belongs to.
+- For each CHUNK, reason and decide which range of slide it should includes.
 - Output each chunk as an **empty structured section**, with only metadata tokens.
 - AI reasoning MUST appear outside the tokens.
 - AI MUST reason about chunk choice before any token begin.
@@ -14,9 +14,13 @@ Instructions:
 <<CHUNKEND:end_slide_number_inclusive>>
 <</!CHUNK>>
 
-- Each CHUNK must correspond to one unit of content (e.g., 5-10 slides).
+- Each CHUNK must correspond to one unit of content. Make sure length fall in 5-10 slides.
+- MAKE SURE that each CHUNK should NOT be too long, and NO LONGER than 20 slides (HARD CAP).
 - Multiple CHUNKs should be output as multiple <<!CHUNK>> ... <</!CHUNK>> blocks.
-- CHUNK should be complete but must not overlap.
+- DO NOT include unnecessary whitespace character.
+- DO NOT include any other text inside the token blocks.
+- CHUNK must not overlap.
+- CHUNK could skip over introductory or overview slides. But any slide that contain any knowledge or content must be put inside a chunk.
 """
 
 THEORY_PROMPT = """
@@ -30,7 +34,7 @@ Reason outside the token blocks only. Do not include reasoning inside tokens.
 """
 
 MCQ_PROMPT = """
-Output format:
+Output format for Multiple Choice Question:
 
 (thinking and planning here)
 
@@ -55,6 +59,7 @@ Rules:
 - No extra text inside tokens.
 - Include relevant <<!TOPIC>>...<</!TOPIC>> blocks.
 - Topics must be short, concise noun phrases.
+- Provide only one clear true option, and provide only one answer.
 """
 
 TEXT_PROMPT = """
@@ -85,7 +90,7 @@ Rules:
 """
 
 TF_PROMPT = """
-Output format:
+Output format for True False question:
 
 (thinking and planning here)
 
@@ -112,7 +117,7 @@ Rules:
 """
 
 MULTI_PROMPT = """
-Output format:
+Output format for Multiple Answer Question:
 
 (thinking and planning here)
 
@@ -132,7 +137,7 @@ Write the question text here. It must require selecting potentially multiple cor
 <<!OPTION>>Option 4<</!OPTION>>
 <<!OPTION>>Option 5<</!OPTION>>
 
-<<ANSWER>>02<</ANSWER>>
+<<ANSWER>>0123<</ANSWER>>
 
 Rules:
 - Must strictly follow this token structure.
