@@ -59,7 +59,7 @@ export default function QuizSettings({ session, userId = 'default_user' }) {
         // Cycle through available chunks for this file and pass chunk payload expected by backend.
         const chunk = fileObj.chunks.length > 0 ? fileObj.chunks[i % fileObj.chunks.length] : null;
         return generateQuestion(fileObj.fileId, chunk, "Theory", apiFormat, userId, String(session?.id ?? 'default_subject'))
-          .then((res) => mapApiQuestion(res, settingsType))
+          .then((res) => mapApiQuestion(res, settingsType, fileObj.filename, chunk))
           .catch((err) => {
             console.error("Question generation failed:", err);
             return null;

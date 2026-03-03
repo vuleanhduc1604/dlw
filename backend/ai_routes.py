@@ -64,6 +64,21 @@ def _build_chunk_text(sections: list[dict], chunk_begin: int, chunk_end: int) ->
     ).strip()
 
 
+def fetch_file(*, user_id: str, subject_id: str, file_id: str) -> dict | None:
+    """
+    Fetch a raw file document together with all its chunks.
+
+    Returns the file dict with a 'chunks' key added, or None if not found.
+    Each chunk dict contains: chunk_id, file_id, chunk_begin, chunk_end,
+    chunk_summary, raw_text, filename.
+    """
+    file_doc = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
+    if file_doc is None:
+        return None
+    chunks = list_chunks(user_id=user_id, subject_id=subject_id, file_id=file_id)
+    return {**file_doc, "chunks": chunks}
+
+
 @router.post("/slides", response_model=FileUploadResponse)
 async def upload_slides(
     user_id: str = Form(default="default_user"),

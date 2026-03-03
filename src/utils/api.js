@@ -26,6 +26,21 @@ export async function uploadSlides(file, userId = 'default_user', subjectId = 'd
 }
 
 /**
+ * Fetch a previously uploaded file's details (filename, chunks, etc.).
+ * Returns { file_id, filename, file_type, created_at, chunks: [{chunk_id, file_id, filename, chunk_begin, chunk_end, summary}] }
+ */
+export async function fetchFile(fileId, userId = 'default_user', subjectId = 'default_subject') {
+  const url = `${API_BASE}/slides/${encodeURIComponent(fileId)}?user_id=${encodeURIComponent(userId)}&subject_id=${encodeURIComponent(subjectId)}`;
+  const res = await fetch(url);
+
+  if (!res.ok) {
+    const detail = await res.text().catch(() => res.statusText);
+    throw new Error(`Fetch file failed (${res.status}): ${detail}`);
+  }
+  return res.json();
+}
+
+/**
  * Generate a single quiz question from chunk text.
  * fileId   — slide_id returned by POST /slides
  * chunk    — chunk object from upload response ({chunk_id, summary, ...})
@@ -113,9 +128,9 @@ export async function gradeAnswer(
  *   MULTI → format_type "MCQ"  → treated as MCQ in frontend
  *   TEXT  → format_type "TEXT" → string answer
  */
-export function mapApiQuestion(apiRes, settingsType) {
+export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = null) {
   const { question_id, raw } = apiRes;
-  const { question_text, options = [], answer } = raw;
+  const { question_text, options = [], answer, metadata } = raw;
 
   let finalOptions = options;
   let finalAnswer;
@@ -132,6 +147,20 @@ export function mapApiQuestion(apiRes, settingsType) {
     finalAnswer = isNaN(idx) ? 0 : idx;
   }
 
+  let reference;
+  if (filename) {
+    const slideRef = metadata?.SLIDE;
+    if (slideRef != null && slideRef !== '') {
+      const slides = Array.isArray(slideRef) ? slideRef : [slideRef];
+      const label = slides.length > 1 ? 'Slides' : 'Slide';
+      reference = `${filename} — ${label} ${slides.join(', ')}`;
+    } else if (chunk?.chunk_begin != null && chunk?.chunk_end != null) {
+      reference = `${filename} — Sections ${chunk.chunk_begin}–${chunk.chunk_end}`;
+    } else {
+      reference = filename;
+    }
+  }
+
   return {
     id: question_id,
     type: settingsType,
@@ -139,5 +168,6 @@ export function mapApiQuestion(apiRes, settingsType) {
     text: question_text || 'Question unavailable',
     options: finalOptions,
     answer: finalAnswer,
+    ...(reference !== undefined && { reference }),
   };
 }
