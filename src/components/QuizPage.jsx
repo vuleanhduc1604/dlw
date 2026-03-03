@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import '../styles/QuizPage.css';
-import { gradeQuiz, QUIZ_RESULTS_KEY } from '../utils/quizData';
+import { QUIZ_RESULTS_KEY } from '../utils/quizData';
 import { gradeAnswer } from '../utils/api';
 
 const TYPE_LABELS = {
@@ -85,16 +85,17 @@ export default function QuizPage({ quizMeta, settings, questions, onExit, userId
 
   /* ── Save results to localStorage ── */
   const saveResults = () => {
-    const r = submittedRef.current
-      ? quizResultsRef.current
-      : gradeQuiz(userAnswersRef.current, questions);
+    console.log('[QuizPage] saveResults called — submitted:', submittedRef.current, 'hasResults:', !!quizResultsRef.current);
+    if (!submittedRef.current || !quizResultsRef.current) return;
     try {
-      localStorage.setItem(QUIZ_RESULTS_KEY, JSON.stringify({ results: r, quizMeta }));
+      localStorage.setItem(QUIZ_RESULTS_KEY, JSON.stringify({ results: quizResultsRef.current, quizMeta }));
+      console.log('[QuizPage] wrote results to localStorage');
     } catch (_) {}
   };
 
   /* ── Save on any close (tab X or OS close) ── */
   useEffect(() => {
+    console.log('[QuizPage] mounted — questions:', questions?.length, 'userId:', userId, 'subjectId:', subjectId);
     window.addEventListener('beforeunload', saveResults);
     return () => window.removeEventListener('beforeunload', saveResults);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps

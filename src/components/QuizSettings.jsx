@@ -83,8 +83,17 @@ export default function QuizSettings({ session, userId = 'default_user' }) {
     ].join(",");
 
     localStorage.removeItem(QUIZ_RESULTS_KEY);
-    window.open("/?mode=quiz", "quizWindow", features);
+    console.log('[QuizSettings] opening popup, questions:', questions.length, questions);
+    const popup = window.open("/?mode=quiz", "quizWindow", features);
+    console.log('[QuizSettings] popup result:', popup, 'closed:', popup?.closed);
     setGenerating(false);
+
+    if (!popup || popup.closed) {
+      alert(
+        'Your browser blocked the quiz window.\n\n' +
+        'To fix: click the popup-blocked icon in your address bar and allow popups from this site, then click "Start Quiz →" again.'
+      );
+    }
   };
 
   const summaryText = `${numQuestions} questions · ${difficulty} · ${

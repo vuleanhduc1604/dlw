@@ -157,14 +157,14 @@ def generate_quiz_modular(
     """
 
     prompt = build_quiz_prompt(chunk_text, topic_type, format_type)
-    print(f"Prompt: \n{prompt}")
+    # print(f"Prompt: \n{prompt}")
     for attempt in range(max_retries):
         response = call_openai_model(
             client=get_openai_client(),
             prompt=prompt,
             model_name=model_name,
         )
-        print(f"Response: {response}")
+        # print(f"Response: {response}")
 
         # QUESTION
         q_sec = parse_sections(response, "QUESTION", repeatable=False)
@@ -173,10 +173,17 @@ def generate_quiz_modular(
 
         metadata, remaining_text = parse_metadata(q_sec)
 
-        # OPTION
-        options = parse_sections(response, "OPTION", repeatable=True)
-        if not options:
-            continue
+        # OPTION - TEXT questions have no options; skip the check for them
+        if format_type == "TEXT":
+            options = []
+        else:
+            options = parse_sections(response, "OPTION", repeatable=True)
+            if not options:
+                # Fallback: accept <<OPTION>> without ! prefix
+                options = re.findall(r"<<OPTION>>\s*(.*?)\s*<</OPTION>>", response, re.DOTALL)
+                options = [o.strip() for o in options]
+            if not options:
+                continue
 
         # ANSWER
         answer_sec = parse_sections(response, "ANSWER", repeatable=False)
@@ -184,6 +191,10 @@ def generate_quiz_modular(
             continue
 
         answer = answer_sec.strip()
+
+        # For MULTI, answer must be digits only (e.g. "024"), not a text sentence
+        if format_type == "MULTI" and not answer.isdigit():
+            continue
 
         return {
             "metadata": metadata,

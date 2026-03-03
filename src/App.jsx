@@ -19,11 +19,16 @@ const App = () => {
   const [quizWindowData] = useState(() => {
     const isQuizMode =
       new URLSearchParams(window.location.search).get('mode') === 'quiz';
+    console.log('[App] init — isQuizMode:', isQuizMode);
     if (!isQuizMode) return null;
     try {
       const raw = sessionStorage.getItem(QUIZ_STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
-    } catch {
+      console.log('[App] sessionStorage quiz data:', raw ? `${raw.length} chars` : 'null');
+      const parsed = raw ? JSON.parse(raw) : null;
+      console.log('[App] parsed quizWindowData:', parsed ? `${parsed.questions?.length} questions` : 'null');
+      return parsed;
+    } catch (e) {
+      console.error('[App] failed to parse quiz data from sessionStorage:', e);
       return null;
     }
   });
@@ -60,9 +65,11 @@ const App = () => {
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key !== QUIZ_RESULTS_KEY) return;
+      console.log('[App] storage event fired for QUIZ_RESULTS_KEY', { newValue: e.newValue });
       try {
         const data = JSON.parse(e.newValue);
         if (data) {
+          console.log('[App] setting quiz results from storage event', data);
           setLastQuizResults(data);
           setActiveTab('quiz');
         }
