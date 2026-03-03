@@ -157,13 +157,14 @@ def generate_quiz_modular(
     """
 
     prompt = build_quiz_prompt(chunk_text, topic_type, format_type)
-
+    print(f"Prompt: \n{prompt}")
     for attempt in range(max_retries):
         response = call_openai_model(
             client=get_openai_client(),
             prompt=prompt,
             model_name=model_name,
         )
+        print(f"Response: {response}")
 
         # QUESTION
         q_sec = parse_sections(response, "QUESTION", repeatable=False)
