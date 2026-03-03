@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react'
 import '../styles/UploadPage.css'
 import { Upload, X, FileText, Image as ImageIcon, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { uploadSlides } from '../utils/api';
-function UploadPage({ onUploadComplete, isInSession }) {
+function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', subjectId = null, sessionFiles = [] }) {
     const [files, setFiles] = useState([]);
     const [dragActive, setDragActive] = useState(false);
     const [quizTitle, setQuizTitle] = useState('');
@@ -33,10 +33,12 @@ function UploadPage({ onUploadComplete, isInSession }) {
 
         const title = isInSession ? null : quizTitle;
         const fileCount = files.length;
+        // For new sessions, generate a unique subjectId; for existing sessions, use the one passed in
+        const resolvedSubjectId = subjectId ?? String(Date.now());
 
-        uploadFiles().then((apiData) => {
+        uploadFiles(resolvedSubjectId).then((apiData) => {
             if (onUploadComplete) {
-                onUploadComplete(title, fileCount, apiData);
+                onUploadComplete(title, fileCount, apiData, resolvedSubjectId);
             }
         });
 
@@ -104,7 +106,7 @@ function UploadPage({ onUploadComplete, isInSession }) {
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     };
 
-    const uploadFiles = async () => {
+    const uploadFiles = async (resolvedSubjectId) => {
         const filesToUpload = files.filter(f => f.status === 'ready');
         const uploadedFiles = [];
 
@@ -114,7 +116,7 @@ function UploadPage({ onUploadComplete, isInSession }) {
             ));
 
             try {
-                const apiData = await uploadSlides(fileObj.file);
+                const apiData = await uploadSlides(fileObj.file, userId, resolvedSubjectId);
 
                 uploadedFiles.push({
                     fileId: apiData.slide_id,
@@ -164,6 +166,12 @@ function UploadPage({ onUploadComplete, isInSession }) {
                         <p className="subtitle">Upload lecture slides / notes for quiz generation</p>
                     </>
                 )}
+                {isInSession && (
+                    <>
+                        <h2>Add More Files</h2>
+                        <p className="subtitle">Additional files will be included in future quiz generation</p>
+                    </>
+                )}
 
                 {/* Input Fields — only shown when not in a session */}
                 {!isInSession && (
@@ -195,6 +203,34 @@ function UploadPage({ onUploadComplete, isInSession }) {
                         </div>
                     </div>
                 )}
+                {/* Already-uploaded files for the current session */}
+                {isInSession && sessionFiles.length > 0 && (
+                    <div className="session-files-section">
+                        <div className="session-files-header">
+                            <span className="session-files-title">Files in this session</span>
+                            <span className="session-files-badge">{sessionFiles.length}</span>
+                        </div>
+                        <div className="files-list">
+                            {sessionFiles.map((f) => (
+                                <div key={f.fileId} className="file-item session-file-saved">
+                                    <div className="file-preview">
+                                        <FileText size={24} />
+                                    </div>
+                                    <div className="file-info">
+                                        <div className="file-name">{f.filename}</div>
+                                        <div className="file-meta">
+                                            <span>{f.chunks?.length ?? 0} sections</span>
+                                        </div>
+                                    </div>
+                                    <div className="file-actions">
+                                        <CheckCircle size={20} className="success-icon" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
                 {/* Drop Zone */}
                 <div
                     className={`drop-zone ${dragActive ? 'active' : ''}`}

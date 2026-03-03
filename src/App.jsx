@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase/firebaseConfig';
+import { saveSubject, loadSubjects } from './firebase/subjects';
 import './styles/UploadPage.css';
+import './styles/LoginPage.css';
 import SideBar from './components/SideBar';
 import UploadPage from './components/UploadPage';
 import QuizSettings from './components/QuizSettings';
 import QuizResults from './components/QuizResults';
 import QuizPage from './components/QuizPage';
 import AnalyticsPage from './components/AnalyticsPage';
+import LoginPage from './components/LoginPage';
 import { QUIZ_STORAGE_KEY, QUIZ_RESULTS_KEY } from './utils/quizData';
 
 const App = () => {
   // ── All hooks must be called unconditionally at the top ───────────────────
+  const [user, setUser] = useState(undefined); // undefined = loading, null = signed out
   const [quizWindowData] = useState(() => {
     const isQuizMode =
       new URLSearchParams(window.location.search).get('mode') === 'quiz';
@@ -26,6 +32,29 @@ const App = () => {
   const [uploadSessions, setUploadSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
   const [lastQuizResults, setLastQuizResults] = useState(null);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+
+  // Listen for Firebase auth state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser ?? null);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Load saved subjects when user logs in
+  useEffect(() => {
+    if (!user) {
+      setUploadSessions([]);
+      setCurrentSessionId(null);
+      return;
+    }
+    setSessionsLoading(true);
+    loadSubjects(user.uid)
+      .then((sessions) => setUploadSessions(sessions))
+      .catch((err) => console.error('Failed to load subjects:', err))
+      .finally(() => setSessionsLoading(false));
+  }, [user]);
 
   // Listen for quiz results written to localStorage by the popup window
   useEffect(() => {
@@ -46,31 +75,50 @@ const App = () => {
   const isInActiveSession = uploadSessions.length > 0 && currentSessionId !== null;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleUploadComplete = (title, fileCount, apiData) => {
+  const handleUploadComplete = (title, fileCount, apiData, subjectId) => {
     const newFiles = apiData?.files || [];
 
     if (isInActiveSession) {
-      // Add files to the existing session
-      setUploadSessions(prev => prev.map(s =>
-        s.id === currentSessionId
-          ? { ...s, fileCount: s.fileCount + fileCount, files: [...s.files, ...newFiles] }
-          : s
-      ));
+      setUploadSessions(prev => {
+        const updated = prev.map(s =>
+          s.id === currentSessionId
+            ? { ...s, fileCount: s.fileCount + fileCount, files: [...s.files, ...newFiles] }
+            : s
+        );
+        // Persist the updated session
+        const updatedSession = updated.find(s => s.id === currentSessionId);
+        if (updatedSession) saveSubject(user.uid, updatedSession).catch(console.error);
+        return updated;
+      });
       setActiveTab('quiz');
       return;
     }
 
     const newSession = {
-      id: Date.now(),
+      id: subjectId,
       name: title || `Session ${uploadSessions.length + 1}`,
       date: new Date().toISOString().split('T')[0],
-      fileCount: fileCount,
+      fileCount,
       files: newFiles,
     };
     setUploadSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
     setActiveTab('quiz');
+    saveSubject(user.uid, newSession).catch(console.error);
   };
+
+  // ── Auth guards ───────────────────────────────────────────────────────────
+  if (user === undefined) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc' }}>
+        <div style={{ width: 32, height: 32, border: '3px solid #e2e8f0', borderTopColor: '#1d4ed8', borderRadius: '50%', animation: 'login-spin 0.7s linear infinite' }} />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   // ── Quiz popup window: render QuizPage directly, no shell ────────────────
   if (quizWindowData) {
@@ -128,12 +176,26 @@ const App = () => {
             ) }
           </nav>
           <div className="user-section">
-            <div className="user-avatar" />
+            <span style={{ fontSize: 13, color: 'var(--text-secondary, #64748b)', marginRight: 10 }}>
+              {user.displayName || user.email}
+            </span>
+            <button
+              onClick={() => signOut(auth)}
+              style={{ fontSize: 13, padding: '6px 14px', background: 'transparent', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 6, cursor: 'pointer', color: 'var(--text-secondary, #64748b)' }}
+            >
+              Sign out
+            </button>
           </div>
         </header>
 
         {activeTab === 'upload' && (
-          <UploadPage onUploadComplete={handleUploadComplete} isInSession={isInActiveSession} />
+          <UploadPage
+            onUploadComplete={handleUploadComplete}
+            isInSession={isInActiveSession}
+            userId={user.uid}
+            subjectId={currentSessionId ?? null}
+            sessionFiles={uploadSessions.find(s => s.id === currentSessionId)?.files ?? []}
+          />
         )}
         {activeTab === 'quiz' && (
           lastQuizResults
@@ -144,10 +206,13 @@ const App = () => {
               />
             : <QuizSettings
                 session={uploadSessions.find(s => s.id === currentSessionId)}
+                userId={user.uid}
               />
         )}
         {activeTab === 'analytics' && (
-          <AnalyticsPage />
+          sessionsLoading
+            ? <div style={{ padding: 40, color: 'var(--text-secondary)' }}>Loading…</div>
+            : <AnalyticsPage />
         )}
       </main>
     </div>

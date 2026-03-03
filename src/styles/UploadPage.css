@@ -653,3 +653,52 @@ body {
     justify-content: flex-end;
   }
 }
+
+/* Session files panel */
+.session-files-section {
+  margin-bottom: 28px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+.session-files-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.session-files-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.session-files-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  background: var(--primary-blue);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 11px;
+}
+
+.session-file-saved {
+  background: rgba(16, 185, 129, 0.04);
+  border-color: rgba(16, 185, 129, 0.18);
+}
+
+.session-file-saved:hover {
+  background: rgba(16, 185, 129, 0.08);
+  transform: none;
+}

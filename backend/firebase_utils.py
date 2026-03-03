@@ -26,10 +26,15 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Optional, Sequence, Tuple
 
+from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
+
+# Load .env relative to this file (backend/.env)
+load_dotenv(Path(__file__).parent / ".env")
 
 
 Filter = Tuple[str, str, Any]  # (field, op, value)
@@ -63,6 +68,11 @@ def init_firebase_admin(*, service_account_path: str | None = None, project_id: 
     project_id = project_id or os.getenv("FIREBASE_PROJECT_ID") or "dlwsus"
 
     if service_account_path:
+        # Resolve relative paths against the backend/ directory
+        resolved = Path(service_account_path)
+        if not resolved.is_absolute():
+            resolved = Path(__file__).parent / resolved
+        service_account_path = str(resolved)
         cred = credentials.Certificate(service_account_path)
         firebase_admin.initialize_app(cred, {"projectId": project_id})
         return

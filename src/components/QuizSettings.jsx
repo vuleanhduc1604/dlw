@@ -3,7 +3,7 @@ import "../styles/QuizSettings.css";
 import { getAllMockQuestions, buildQuestions, QUIZ_STORAGE_KEY, QUIZ_RESULTS_KEY } from "../utils/quizData";
 import { generateQuestion, mapApiQuestion } from "../utils/api";
 
-export default function QuizSettings({ session }) {
+export default function QuizSettings({ session, userId = 'default_user' }) {
   const [numQuestions, setNumQuestions] = useState(10);
   const [difficulty, setDifficulty] = useState("Mixed");
   const [types, setTypes] = useState(["MCQ", "TF", "MULTI", "TEXT"]);
@@ -58,7 +58,7 @@ export default function QuizSettings({ session }) {
         const apiFormat = toApiFormat(settingsType);
         // Cycle through available chunks for this file and pass chunk payload expected by backend.
         const chunk = fileObj.chunks.length > 0 ? fileObj.chunks[i % fileObj.chunks.length] : null;
-        return generateQuestion(fileObj.fileId, chunk, "Theory", apiFormat)
+        return generateQuestion(fileObj.fileId, chunk, "Theory", apiFormat, userId, String(session?.id ?? 'default_subject'))
           .then((res) => mapApiQuestion(res, settingsType))
           .catch((err) => {
             console.error("Question generation failed:", err);
