@@ -51,18 +51,25 @@ const LoginPage = () => {
 
       {/* Hero */}
       <section className="home-hero">
+        {/* Animated background blobs */}
+        <div className="home-blob home-blob--1" />
+        <div className="home-blob home-blob--2" />
+        <div className="home-blob home-blob--3" />
+        {/* Dot grid overlay */}
+        <div className="home-hero-grid" />
+
         <div className="home-hero-inner">
-          <div className="home-hero-badge">AI-powered study tool</div>
-          <h1 className="home-hero-title">
+          <div className="home-hero-badge hero-anim hero-anim--1">AI-powered study tool</div>
+          <h1 className="home-hero-title hero-anim hero-anim--2">
             Turn your slides into<br />
             <span className="home-hero-accent">adaptive quizzes</span>
           </h1>
-          <p className="home-hero-sub">
+          <p className="home-hero-sub hero-anim hero-anim--3">
             Upload lecture notes or PDFs, generate MCQ, True/False, multi-select and short-answer
             questions instantly, and track your progress over time.
           </p>
           <button
-            className="home-hero-cta"
+            className="home-hero-cta hero-anim hero-anim--4"
             onClick={handleGoogleSignIn}
             disabled={loading}
           >
@@ -76,21 +83,21 @@ const LoginPage = () => {
       {/* Features */}
       <section className="home-features">
         <div className="home-features-grid">
-          <div className="home-feature-card">
+          <div className="home-feature-card feature-anim feature-anim--1">
             <div className="home-feature-icon">&#128196;</div>
             <h3 className="home-feature-title">Upload your material</h3>
             <p className="home-feature-desc">
               Drop in any PDF or slide deck. The AI chunks your content into logical study units automatically.
             </p>
           </div>
-          <div className="home-feature-card">
+          <div className="home-feature-card feature-anim feature-anim--2">
             <div className="home-feature-icon">&#129488;</div>
             <h3 className="home-feature-title">Generate quizzes instantly</h3>
             <p className="home-feature-desc">
               Choose question count and type — MCQ, True/False, Multi-select, or Short Answer — and get a tailored quiz in seconds.
             </p>
           </div>
-          <div className="home-feature-card">
+          <div className="home-feature-card feature-anim feature-anim--3">
             <div className="home-feature-icon">&#128200;</div>
             <h3 className="home-feature-title">Track your progress</h3>
             <p className="home-feature-desc">
