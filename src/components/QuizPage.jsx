@@ -175,6 +175,8 @@ export default function QuizPage({ quizMeta, settings, questions, onExit }) {
   };
 
   const gradeWithBackend = async () => {
+    
+    const pointsPerQuestion = questions.length > 0 ? 100 / questions.length : 0;
     const gradedEntries = await Promise.all(
       questions.map(async (question) => {
         const rawUserAnswer = userAnswersRef.current[question.id];
@@ -197,7 +199,9 @@ export default function QuizPage({ quizMeta, settings, questions, onExit }) {
             question.type,
           );
           const score = Number(result?.score ?? 0);
-          return [question.id, { correct: score >= 10, score }];
+          const scaledScore = (score / 10) * pointsPerQuestion;
+
+          return [question.id, { correct: score >= 10, score: scaledScore }];
         } catch (_) {
           return [question.id, { correct: false, score: 0 }];
         }
@@ -207,8 +211,9 @@ export default function QuizPage({ quizMeta, settings, questions, onExit }) {
     const results = Object.fromEntries(gradedEntries);
     const total = questions.length;
     const totalScore = questions.reduce((sum, question) => sum + (results[question.id]?.score || 0), 0);
+
     const correct = questions.filter((question) => results[question.id]?.correct).length;
-    const score_pct = total > 0 ? Math.round((totalScore / (total * 10)) * 1000) / 10 : 0;
+    const score_pct = Math.round(totalScore * 10) / 10;
 
     return { score_pct, correct, total, results };
   };
