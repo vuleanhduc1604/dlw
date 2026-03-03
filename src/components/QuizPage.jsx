@@ -31,6 +31,72 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
+function openSlideViewer(question) {
+  const { slideText, slideNums, reference } = question;
+  if (!slideText) return;
+
+  const targetSlide = slideNums?.length > 0
+    ? Math.min(...slideNums.map(Number).filter(n => !isNaN(n)))
+    : null;
+
+  // Parse "Slide N:\ncontent" blocks from raw_text
+  const sections = [];
+  const regex = /^Slide (\d+):\n([\s\S]*?)(?=^Slide \d+:|$(?![\s\S]))/gm;
+  let match;
+  const paddedText = slideText + '\nSlide 999999:\n';
+  while ((match = regex.exec(paddedText)) !== null) {
+    const num = parseInt(match[1], 10);
+    if (num !== 999999) sections.push({ num, content: match[2].trim() });
+  }
+
+  const slidesHtml = sections.length > 0
+    ? sections.map(sec => {
+        const isTarget = slideNums?.includes(sec.num);
+        return `<section id="slide-${sec.num}"${isTarget ? ' class="highlighted"' : ''}>
+          <h3>Slide ${sec.num}</h3>
+          <p>${esc(sec.content)}</p>
+        </section>`;
+      }).join('\n')
+    : `<section><pre>${esc(slideText)}</pre></section>`;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${reference ?? 'Slide Viewer'}</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:system-ui,-apple-system,sans-serif;background:#f8fafc;color:#1e293b}
+    header{background:#1d4ed8;color:#fff;padding:14px 24px;font-size:14px;font-weight:600;position:sticky;top:0;z-index:10}
+    .slides{max-width:800px;margin:24px auto;padding:0 24px 60px;display:flex;flex-direction:column;gap:14px}
+    section{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:20px 24px}
+    section.highlighted{border-color:#1d4ed8;box-shadow:0 0 0 3px rgba(29,78,216,.15)}
+    h3{font-size:11px;font-weight:700;color:#1d4ed8;text-transform:uppercase;letter-spacing:.6px;margin-bottom:10px}
+    p{line-height:1.75;font-size:14px;white-space:pre-wrap;color:#334155}
+    pre{font-family:inherit;white-space:pre-wrap;line-height:1.75;font-size:14px}
+  </style>
+</head>
+<body>
+  <header>↗ ${reference ?? 'Slide Reference'}</header>
+  <div class="slides">${slidesHtml}</div>
+  <script>
+    const el = document.getElementById('slide-${targetSlide}');
+    if (el) el.scrollIntoView({ behavior: 'instant', block: 'start' });
+  <\/script>
+</body>
+</html>`;
+
+  const win = window.open(
+    '',
+    '_blank',
+    'width=860,height=700,left=100,top=80,menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes',
+  );
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  }
+}
+
 /* ── MathQuill input field for math answers ── */
 function MathQuillInput({ value, disabled, onChange }) {
   const containerRef = useRef(null);
@@ -446,9 +512,15 @@ export default function QuizPage({ quizMeta, settings, questions, onExit, userId
               </div>
             )}
 
-            {/* Reference tag */}
-            {q.reference && (
-              <div className="qp-reference">↗ {q.reference}</div>
+            {/* Reference tag — only visible after submission */}
+            {submitted && q.reference && (
+              <button
+                className="qp-reference"
+                onClick={() => openSlideViewer(q)}
+                title="View source slides"
+              >
+                ↗ {q.reference}
+              </button>
             )}
 
             {/* Answer area */}

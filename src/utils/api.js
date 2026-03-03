@@ -148,13 +148,20 @@ export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = nu
   }
 
   let reference;
+  let slideNums = null;
+
   if (filename) {
     const slideRef = metadata?.SLIDE;
     if (slideRef != null && slideRef !== '') {
       const slides = Array.isArray(slideRef) ? slideRef : [slideRef];
+      slideNums = slides.map(Number).filter(n => !isNaN(n));
       const label = slides.length > 1 ? 'Slides' : 'Slide';
       reference = `${filename} — ${label} ${slides.join(', ')}`;
     } else if (chunk?.chunk_begin != null && chunk?.chunk_end != null) {
+      slideNums = Array.from(
+        { length: chunk.chunk_end - chunk.chunk_begin + 1 },
+        (_, i) => chunk.chunk_begin + i,
+      );
       reference = `${filename} — Sections ${chunk.chunk_begin}–${chunk.chunk_end}`;
     } else {
       reference = filename;
@@ -169,5 +176,7 @@ export function mapApiQuestion(apiRes, settingsType, filename = null, chunk = nu
     options: finalOptions,
     answer: finalAnswer,
     ...(reference !== undefined && { reference }),
+    ...(slideNums !== null && { slideNums }),
+    ...(chunk?.raw_text && { slideText: chunk.raw_text }),
   };
 }
