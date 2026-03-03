@@ -60,7 +60,7 @@ def _build_chunk_text(sections: list[dict], chunk_begin: int, chunk_end: int) ->
         sec for sec in sections if chunk_begin <= int(sec.get("section_id", 0)) <= chunk_end
     ]
     return "\n\n".join(
-        f"Section {sec.get('section_id', '')}:\n{sec.get('content', '')}" for sec in included
+        f"Slide {sec.get('section_id', '')}:\n{sec.get('content', '')}" for sec in included
     ).strip()
 
 
