@@ -49,16 +49,21 @@ export default function QuizSettings({ session, userId = 'default_user' }) {
     if (sessionFiles && sessionFiles.length > 0) {
       // Generate questions from uploaded slides via API
       const validTypes = types.length > 0 ? types : ["MCQ"];
-      // Backend supports "MCQ" and "TEXT" format types
-      const toApiFormat = (t) => (t === "TEXT" ? "TEXT" : "MCQ");
+      // Backend supports MCQ, TF, TEXT format types (MULTI maps to MCQ)
+      // const toApiFormat = (t) => {
+      //   if (t === "TEXT") return "TEXT";
+      //   if (t === "TF") return "TF";
+      //   if (t === "MULTI") return "MULTI";
+      //   return "MCQ";
+      // };
 
       const promises = Array.from({ length: numQuestions }, (_, i) => {
         const fileObj = sessionFiles[i % sessionFiles.length];
         const settingsType = validTypes[i % validTypes.length];
-        const apiFormat = toApiFormat(settingsType);
+        // const apiFormat = toApiFormat(settingsType);
         // Cycle through available chunks for this file and pass chunk payload expected by backend.
         const chunk = fileObj.chunks.length > 0 ? fileObj.chunks[i % fileObj.chunks.length] : null;
-        return generateQuestion(fileObj.fileId, chunk, "Theory", apiFormat, userId, String(session?.id ?? 'default_subject'))
+        return generateQuestion(fileObj.fileId, chunk, "Theory", settingsType, userId, String(session?.id ?? 'default_subject'))
           .then((res) => mapApiQuestion(res, settingsType, fileObj.filename, chunk))
           .catch((err) => {
             console.error("Question generation failed:", err);
