@@ -362,4 +362,4 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
     )
 }
 
-export default UploadPage
+export default UploadPage;
