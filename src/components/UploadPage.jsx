@@ -2,6 +2,26 @@ import React, { useState, useRef } from 'react'
 import '../styles/UploadPage.css'
 import { Upload, X, FileText, Image as ImageIcon, CheckCircle, AlertCircle, Loader } from 'lucide-react';
 import { uploadSlides } from '../utils/api';
+
+function SkeletonQuestionCard() {
+  return (
+    <div className="sk-card">
+      <div className="sk-card-meta">
+        <div className="sk-block sk-badge" />
+        <div className="sk-block sk-counter" />
+      </div>
+      <div className="sk-block sk-line sk-line-lg" />
+      <div className="sk-block sk-line sk-line-md" />
+      <div className="sk-options">
+        <div className="sk-block sk-option" />
+        <div className="sk-block sk-option" />
+        <div className="sk-block sk-option" />
+        <div className="sk-block sk-option" />
+      </div>
+    </div>
+  );
+}
+
 function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', subjectId = null, sessionFiles = [] }) {
     const [files, setFiles] = useState([]);
     const [dragActive, setDragActive] = useState(false);
@@ -307,6 +327,22 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                     </div>
                 )}
             </div>
+
+            {/* Skeleton preview — shown while any file is processing */}
+            {files.some(f => f.status === 'uploading') && (
+                <div className="sk-preview-section">
+                    <div className="sk-preview-header">
+                        <Loader className="spinner" size={16} />
+                        <span>Building your questions…</span>
+                    </div>
+                    <div className="sk-preview-grid">
+                        <SkeletonQuestionCard />
+                        <SkeletonQuestionCard />
+                        <SkeletonQuestionCard />
+                    </div>
+                </div>
+            )}
+
             {/* Create Session Button */}
             <div className="create-section">
                 <button
