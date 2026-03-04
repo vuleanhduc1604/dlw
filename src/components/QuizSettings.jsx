@@ -75,8 +75,12 @@ export default function QuizSettings({ session, userId = 'default_user' }) {
       const resolved = await Promise.all(promises);
       questions = resolved.filter(Boolean);
     } else {
-      // Fallback to mock data when no uploaded slides are present
-      questions = buildQuestions(getAllMockQuestions(), settings);
+      console.error('[QuizSettings] No session files found, session:', session);
+      alert('No uploaded files found in this session. Please upload slides before starting a quiz.');
+      setGenerating(false);
+      return;
+      // Remove or comment out the mock fallback below if you don't want it
+      // questions = buildQuestions(getAllMockQuestions(), settings);
     }
 
     sessionStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify({ quizMeta, settings, questions, userId, subjectId: String(session?.id ?? 'default_subject') }));

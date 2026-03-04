@@ -7,7 +7,7 @@ export const API_BASE = 'http://127.0.0.1:8000';
  * Returns { slide_id, filename, file_type, chunks: [{chunk_id, file_id, filename, chunk_begin, chunk_end, summary}] }
  */
 export async function uploadSlides(file, userId = 'default_user', subjectId = 'default_subject') {
-  const url = `${API_BASE}/slides`;
+  const url = `${API_BASE}/files`;
   const formData = new FormData();
   formData.append('file', file);
   formData.append('user_id', userId);
@@ -24,25 +24,9 @@ export async function uploadSlides(file, userId = 'default_user', subjectId = 'd
   }
   return res.json();
 }
-
-/**
- * Fetch a previously uploaded file's details (filename, chunks, etc.).
- * Returns { file_id, filename, file_type, created_at, chunks: [{chunk_id, file_id, filename, chunk_begin, chunk_end, summary}] }
- */
-export async function fetchFile(fileId, userId = 'default_user', subjectId = 'default_subject') {
-  const url = `${API_BASE}/slides/${encodeURIComponent(fileId)}?user_id=${encodeURIComponent(userId)}&subject_id=${encodeURIComponent(subjectId)}`;
-  const res = await fetch(url);
-
-  if (!res.ok) {
-    const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Fetch file failed (${res.status}): ${detail}`);
-  }
-  return res.json();
-}
-
 /**
  * Generate a single quiz question from chunk text.
- * fileId   — slide_id returned by POST /slides
+ * fileId   — file_id returned by POST /files
  * chunk    — chunk object from upload response ({chunk_id, summary, ...})
  * Returns { question_id, raw: { metadata, question_text, options, answer } }
  */
@@ -59,7 +43,7 @@ export async function generateQuestion(
     throw new Error('Cannot generate question: selected chunk has no summary text.');
   }
 
-  const url = `${API_BASE}/quiz/generate`;
+  const url = `${API_BASE}/questions`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -77,7 +61,7 @@ export async function generateQuestion(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Quiz generation failed (${res.status}): ${detail}`);
+    throw new Error(`Question generation failed (${res.status}): ${detail}`);
   }
 
   return res.json();
@@ -87,7 +71,7 @@ export async function generateQuestion(
  * Delete an uploaded file and all its chunks from the backend.
  */
 export async function deleteFile(fileId, userId = 'default_user', subjectId = 'default_subject') {
-  const url = `${API_BASE}/slides/${encodeURIComponent(fileId)}`
+  const url = `${API_BASE}/files/${encodeURIComponent(fileId)}`
     + `?user_id=${encodeURIComponent(userId)}&subject_id=${encodeURIComponent(subjectId)}`;
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok && res.status !== 404) {
@@ -97,8 +81,8 @@ export async function deleteFile(fileId, userId = 'default_user', subjectId = 'd
 }
 
 /**
- * Grade a quiz answer on the backend.
- * Returns { attempt_id, question_id, score, max_score }
+ * Submit and grade a quiz answer on the backend.
+ * Returns { attempt_id, question_id, score }
  */
 export async function gradeAnswer(
   questionId,
@@ -108,7 +92,7 @@ export async function gradeAnswer(
   userId = 'default_user',
   subjectId = 'default_subject',
 ) {
-  const url = `${API_BASE}/quiz/answer`;
+  const url = `${API_BASE}/attempts`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -125,7 +109,7 @@ export async function gradeAnswer(
 
   if (!res.ok) {
     const detail = await res.text().catch(() => res.statusText);
-    throw new Error(`Grading failed (${res.status}): ${detail}`);
+    throw new Error(`Answer submission failed (${res.status}): ${detail}`);
   }
 
   return res.json();

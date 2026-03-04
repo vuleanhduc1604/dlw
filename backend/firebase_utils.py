@@ -31,7 +31,7 @@ from typing import Any, Optional, Sequence, Tuple
 
 from dotenv import load_dotenv
 import firebase_admin
-from firebase_admin import credentials, firestore
+from firebase_admin import credentials, firestore, storage
 
 # Load .env relative to this file (backend/.env)
 load_dotenv(Path(__file__).parent / ".env")
@@ -74,15 +74,80 @@ def init_firebase_admin(*, service_account_path: str | None = None, project_id: 
             resolved = Path(__file__).parent / resolved
         service_account_path = str(resolved)
         cred = credentials.Certificate(service_account_path)
-        firebase_admin.initialize_app(cred, {"projectId": project_id})
+        firebase_admin.initialize_app(cred, {
+            "projectId": project_id,
+            "storageBucket": f"{project_id}.appspot.com"
+        })
         return
 
-    firebase_admin.initialize_app(options={"projectId": project_id})
+    firebase_admin.initialize_app(options={
+        "projectId": project_id,
+        "storageBucket": f"{project_id}.appspot.com"
+    })
 
 
 def db() -> firestore.Client:
     init_firebase_admin()
     return firestore.client()
+
+
+def get_storage_bucket():
+    """Get the default Firebase Storage bucket."""
+    init_firebase_admin()
+    return storage.bucket()
+
+
+def upload_file_to_storage(
+    file_bytes: bytes,
+    storage_path: str,
+    content_type: str = "application/pdf",
+) -> str:
+    """
+    Upload a file to Firebase Storage.
+
+    Args:
+        file_bytes: The file content as bytes
+        storage_path: Path in storage (e.g., "files/user123/subject456/file789.pdf")
+        content_type: MIME type of the file
+
+    Returns:
+        Public download URL for the file
+    """
+    bucket = get_storage_bucket()
+    blob = bucket.blob(storage_path)
+    blob.upload_from_string(file_bytes, content_type=content_type)
+
+    # Make the blob publicly accessible (or use signed URLs for security)
+    blob.make_public()
+    return blob.public_url
+
+
+def download_file_from_storage(storage_path: str) -> bytes:
+    """
+    Download a file from Firebase Storage.
+
+    Args:
+        storage_path: Path in storage (e.g., "files/user123/subject456/file789.pdf")
+
+    Returns:
+        File content as bytes
+    """
+    bucket = get_storage_bucket()
+    blob = bucket.blob(storage_path)
+    return blob.download_as_bytes()
+
+
+def delete_file_from_storage(storage_path: str) -> None:
+    """
+    Delete a file from Firebase Storage.
+
+    Args:
+        storage_path: Path in storage (e.g., "files/user123/subject456/file789.pdf")
+    """
+    bucket = get_storage_bucket()
+    blob = bucket.blob(storage_path)
+    if blob.exists():
+        blob.delete()
 
 
 def _doc_id(*parts: str) -> str:
@@ -154,6 +219,8 @@ def upsert_raw_file(
     raw_text: str | None = None,
     sections: list[dict[str, Any]] | None = None,
     created_at: str | None = None,
+    file_url: str | None = None,
+    storage_path: str | None = None,
 ) -> str:
     payload: dict[str, Any] = {
         "user_id": user_id,
@@ -171,6 +238,10 @@ def upsert_raw_file(
         payload["sections"] = sections
     if created_at is not None:
         payload["created_at"] = created_at
+    if file_url is not None:
+        payload["file_url"] = file_url
+    if storage_path is not None:
+        payload["storage_path"] = storage_path
 
     doc_id = _doc_id(user_id, subject_id, file_id)
     return upsert_doc(COLL.raw_files, doc_id, payload)

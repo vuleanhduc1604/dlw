@@ -57,9 +57,9 @@ class ChunkResponse(BaseModel):
 
 
 class FileUploadResponse(BaseModel):
-    """Response from POST /slides."""
+    """Response from POST /files."""
 
-    slide_id: str
+    slide_id: str  # TODO: rename to file_id for consistency
     filename: str
     file_type: str
     chunks: List[ChunkResponse]
@@ -121,7 +121,7 @@ class AttemptDetail(BaseModel):
 
 
 class FileDetail(BaseModel):
-    """Full file document returned from GET /slides/{slide_id}."""
+    """Full file document returned from GET /files/{file_id}."""
 
     file_id: str
     filename: str
@@ -131,7 +131,7 @@ class FileDetail(BaseModel):
 
 
 class FileSummary(BaseModel):
-    """Lightweight file entry returned in GET /slides list."""
+    """Lightweight file entry returned in GET /files list."""
 
     file_id: str
     filename: str

@@ -46,7 +46,7 @@ function openSlideViewer(question, userId = 'default_user', subjectId = 'default
       ? Math.min(...slideNums.map(Number).filter(n => !isNaN(n)))
       : 1;
 
-    const fileUrl = `${API_BASE}/slides/${encodeURIComponent(fileId)}/file`
+    const fileUrl = `${API_BASE}/files/${encodeURIComponent(fileId)}/download`
       + `?user_id=${encodeURIComponent(userId)}&subject_id=${encodeURIComponent(subjectId)}`;
 
     const html = `<!DOCTYPE html>

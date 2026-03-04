@@ -29,57 +29,75 @@ function SideBar({ setCurrentSessionId, handleNewSession, uploadSessions, curren
                 <h3>Upload Subjects</h3>
                 <div className="sessions-list">
                     {uploadSessions.length > 0 ? (
-                        uploadSessions.map(session => (
-                            <div
-                                key={session.id}
-                                className={`session-item ${currentSessionId === session.id ? 'active' : ''}`}
-                                style={{ display: 'flex', alignItems: 'center', gap: 0, padding: 0 }}
-                            >
-                                <button
-                                    onClick={() => setCurrentSessionId(session.id)}
-                                    style={{ flex: 1, background: 'none', border: 'none', padding: '10px 12px', cursor: 'pointer', textAlign: 'left' }}
+                        uploadSessions.map(session => {
+                            const isActive = currentSessionId === session.id;
+                            return (
+                                <div
+                                    key={session.id}
+                                    className={`session-item ${isActive ? 'active' : ''}`}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 0,
+                                        padding: 0,
+                                        backgroundColor: isActive ? '#e2e8f0' : 'transparent',
+                                        borderRadius: 8,
+                                    }}
                                 >
-                                    <div className="session-info">
-                                        <span className="session-name">{session.name}</span>
-                                        <span className="session-meta">{session.fileCount} files • {session.date}</span>
-                                    </div>
-                                </button>
-
-                                {confirmingDelete === session.id ? (
-                                    <div style={{ display: 'flex', gap: 4, padding: '0 8px', flexShrink: 0 }}>
-                                        <button
-                                            onClick={(e) => handleConfirmDelete(e, session.id)}
-                                            title="Confirm delete"
-                                            style={{ fontSize: 11, padding: '3px 7px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
-                                        >
-                                            Delete
-                                        </button>
-                                        <button
-                                            onClick={handleCancelDelete}
-                                            title="Cancel"
-                                            style={{ fontSize: 11, padding: '3px 7px', background: 'transparent', color: 'var(--text-secondary, #64748b)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 4, cursor: 'pointer' }}
-                                        >
-                                            Cancel
-                                        </button>
-                                    </div>
-                                ) : (
                                     <button
-                                        onClick={(e) => handleDeleteClick(e, session.id)}
-                                        title="Delete subject"
-                                        className="session-delete-btn"
+                                        onClick={() => setCurrentSessionId(session.id)}
+                                        style={{
+                                            flex: 1,
+                                            background: 'none',
+                                            border: 'none',
+                                            padding: '10px 12px',
+                                            cursor: 'pointer',
+                                            textAlign: 'left',
+                                            color: isActive ? '#fff' : 'inherit',
+                                        }}
                                     >
-                                        ✕
+                                        <div className="session-info">
+                                            <span className="session-name">{session.name}</span>
+                                            <span className="session-meta">{session.fileCount} files • {session.date}</span>
+                                        </div>
                                     </button>
-                                )}
-                            </div>
-                        ))
+
+                                    {confirmingDelete === session.id ? (
+                                        <div style={{ display: 'flex', gap: 4, padding: '0 8px', flexShrink: 0 }}>
+                                            <button
+                                                onClick={(e) => handleConfirmDelete(e, session.id)}
+                                                title="Confirm delete"
+                                                style={{ fontSize: 11, padding: '3px 7px', background: '#ef4444', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                                            >
+                                                Delete
+                                            </button>
+                                            <button
+                                                onClick={handleCancelDelete}
+                                                title="Cancel"
+                                                style={{ fontSize: 11, padding: '3px 7px', background: 'transparent', color: 'var(--text-secondary, #64748b)', border: '1px solid var(--border-color, #e2e8f0)', borderRadius: 4, cursor: 'pointer' }}
+                                            >
+                                                Cancel
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <button
+                                            onClick={(e) => handleDeleteClick(e, session.id)}
+                                            title="Delete subject"
+                                            className="session-delete-btn"
+                                            style={{ color: isActive ? '#fff' : 'inherit' }}
+                                        >
+                                            ✕
+                                        </button>
+                                    )}
+                                </div>
+                            );
+                        })
                     ) : (
                         <div className="empty-state">
                             <p>No subjects yet</p>
                         </div>
                     )}
                 </div>
-                {/* Button to create new session  */}
                 <button className="new-session-btn" onClick={handleNewSession}>+ New Subject</button>
             </div>
         </aside>

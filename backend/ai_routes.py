@@ -32,6 +32,9 @@ from .firebase_utils import (
     upsert_raw_file,
     delete_doc,
     _doc_id,
+    upload_file_to_storage,
+    download_file_from_storage,
+    delete_file_from_storage,
 )
 from .schemas import (
     AnalyticsSummary,
@@ -87,8 +90,8 @@ def fetch_file(*, user_id: str, subject_id: str, file_id: str) -> dict | None:
     return {**file_doc, "chunks": chunks}
 
 
-@router.post("/slides", response_model=FileUploadResponse)
-async def upload_slides(
+@router.post("/files", response_model=FileUploadResponse)
+async def upload_file(
     user_id: str = Form(default="default_user"),
     subject_id: str = Form(default="default_subject"),
     file: UploadFile = File(...),
@@ -97,15 +100,27 @@ async def upload_slides(
     try:
         stage = "process_uploaded_file"
         print(
-            f"[upload_slides] stage={stage} user_id={user_id} subject_id={subject_id} filename={file.filename}",
+            f"[upload_file] stage={stage} user_id={user_id} subject_id={subject_id} filename={file.filename}",
             flush=True,
         )
         processed = await process_uploaded_file(file)
         file_id = str(uuid4())
         created_at = _utc_now_iso()
 
+        # Upload file to Firebase Storage
+        stage = "upload_to_storage"
+        file_ext = processed["file_type"]
+        storage_path = f"files/{user_id}/{subject_id}/{file_id}.{file_ext}"
+        print(f"[upload_file] stage={stage} storage_path={storage_path}", flush=True)
+
+        file_url = upload_file_to_storage(
+            file_bytes=processed["file_bytes"],
+            storage_path=storage_path,
+            content_type=f"application/{file_ext}",
+        )
+
         stage = "upsert_raw_file"
-        print(f"[upload_slides] stage={stage} file_id={file_id}", flush=True)
+        print(f"[upload_file] stage={stage} file_id={file_id}", flush=True)
         upsert_raw_file(
             user_id=user_id,
             subject_id=subject_id,
@@ -116,16 +131,13 @@ async def upload_slides(
             raw_text=processed["raw_text"],
             sections=processed["sections"],
             created_at=created_at,
+            file_url=file_url,
+            storage_path=storage_path,
         )
-
-        # Persist raw bytes to disk so we can serve the original file later
-        file_ext = processed["file_type"]
-        disk_path = _FILES_DIR / f"{file_id}.{file_ext}"
-        disk_path.write_bytes(processed["file_bytes"])
 
         stage = "generate_chunks"
         print(
-            f"[upload_slides] stage={stage} sections={len(processed['sections'])}",
+            f"[upload_file] stage={stage} sections={len(processed['sections'])}",
             flush=True,
         )
         slides_text = "\n\n".join(
@@ -147,7 +159,7 @@ async def upload_slides(
 
             stage = "upsert_chunk"
             print(
-                f"[upload_slides] stage={stage} chunk_id={chunk_id} begin={chunk_begin} end={chunk_end}",
+                f"[upload_file] stage={stage} chunk_id={chunk_id} begin={chunk_begin} end={chunk_end}",
                 flush=True,
             )
             upsert_chunk(
@@ -177,7 +189,7 @@ async def upload_slides(
 
         stage = "return_response"
         print(
-            f"[upload_slides] stage={stage} file_id={file_id} chunks={len(chunks)}",
+            f"[upload_file] stage={stage} file_id={file_id} chunks={len(chunks)}",
             flush=True,
         )
         return FileUploadResponse(
@@ -190,15 +202,15 @@ async def upload_slides(
         raise
     except Exception as exc:
         print(
-            f"[upload_slides] ERROR stage={stage} type={type(exc).__name__} msg={exc}",
+            f"[upload_file] ERROR stage={stage} type={type(exc).__name__} msg={exc}",
             flush=True,
         )
         print(traceback.format_exc(), flush=True)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.get("/slides", response_model=list[FileSummary])
-def get_all_slides(
+@router.get("/files", response_model=list[FileSummary])
+def get_all_files(
     user_id: str = Query(default="default_user"),
     subject_id: str = Query(default="default_subject"),
 ):
@@ -217,22 +229,22 @@ def get_all_slides(
     ]
 
 
-@router.get("/slides/{slide_id}", response_model=FileDetail)
-def get_slide(
-    slide_id: str,
+@router.get("/files/{file_id}", response_model=FileDetail)
+def get_file(
+    file_id: str,
     user_id: str = Query(default="default_user"),
     subject_id: str = Query(default="default_subject"),
 ):
-    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Slide not found")
+        raise HTTPException(status_code=404, detail="File not found")
 
-    chunk_rows = list_chunks(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    chunk_rows = list_chunks(user_id=user_id, subject_id=subject_id, file_id=file_id)
     chunks = [
         ChunkResponse(
             chunk_id=c.get("chunk_id", c.get("id", "")),
-            file_id=slide_id,
-            filename=c.get("filename", row.get("filename", slide_id)),
+            file_id=file_id,
+            filename=c.get("filename", row.get("filename", file_id)),
             chunk_begin=int(c.get("chunk_begin", 0)),
             chunk_end=int(c.get("chunk_end", 0)),
             summary=c.get("chunk_summary", ""),
@@ -241,30 +253,50 @@ def get_slide(
     ]
 
     return FileDetail(
-        file_id=slide_id,
-        filename=row.get("filename", slide_id),
+        file_id=file_id,
+        filename=row.get("filename", file_id),
         file_type=row.get("file_type", "txt"),
         created_at=row.get("created_at", ""),
         chunks=chunks,
     )
 
 
-@router.get("/slides/{slide_id}/file")
-def get_slide_file(
-    slide_id: str,
+@router.get("/files/{file_id}/download")
+def download_file(
+    file_id: str,
     user_id: str = Query(default="default_user"),
     subject_id: str = Query(default="default_subject"),
 ):
-    """Serve the original uploaded file so the frontend can embed it."""
-    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    """Download the original uploaded file."""
+    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Slide not found")
+        raise HTTPException(status_code=404, detail="File not found")
 
+    # Try Firebase Storage first
+    storage_path = row.get("storage_path")
+    if storage_path:
+        try:
+            file_bytes = download_file_from_storage(storage_path)
+            file_type = row.get("file_type", "pdf")
+            mime_type = mimetypes.types_map.get(f".{file_type}", "application/octet-stream")
+
+            return Response(
+                content=file_bytes,
+                media_type=mime_type,
+                headers={
+                    "Content-Disposition": f'inline; filename="{row.get("filename", file_id)}"',
+                    "Cache-Control": "private, max-age=3600",
+                },
+            )
+        except Exception as e:
+            print(f"[download_file] Error downloading from storage: {e}", flush=True)
+
+    # Fallback to disk for legacy files
     file_type = row.get("file_type", "pdf")
-    disk_path = _FILES_DIR / f"{slide_id}.{file_type}"
+    disk_path = _FILES_DIR / f"{file_id}.{file_type}"
 
     if not disk_path.exists():
-        raise HTTPException(status_code=404, detail="File not available on disk (may have been uploaded before this feature was added)")
+        raise HTTPException(status_code=404, detail="File not available")
 
     file_bytes = disk_path.read_bytes()
     mime_type = mimetypes.types_map.get(f".{file_type}", "application/octet-stream")
@@ -273,44 +305,53 @@ def get_slide_file(
         content=file_bytes,
         media_type=mime_type,
         headers={
-            "Content-Disposition": f'inline; filename="{row.get("filename", slide_id)}"',
+            "Content-Disposition": f'inline; filename="{row.get("filename", file_id)}"',
             "Cache-Control": "private, max-age=3600",
         },
     )
 
 
-@router.delete("/slides/{slide_id}", status_code=204)
-def delete_slide(
-    slide_id: str,
+@router.delete("/files/{file_id}", status_code=204)
+def delete_file(
+    file_id: str,
     user_id: str = Query(default="default_user"),
     subject_id: str = Query(default="default_subject"),
 ):
     """Delete a file and all its chunks."""
-    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
     if not row:
-        raise HTTPException(status_code=404, detail="Slide not found")
+        raise HTTPException(status_code=404, detail="File not found")
 
     # Delete all chunks for this file
-    chunk_rows = list_chunks(user_id=user_id, subject_id=subject_id, file_id=slide_id)
+    chunk_rows = list_chunks(user_id=user_id, subject_id=subject_id, file_id=file_id)
     for chunk in chunk_rows:
         doc_id = chunk.get("id", "")
         if doc_id:
             delete_doc(COLL.chunks, doc_id)
 
     # Delete the raw_file document
-    delete_doc(COLL.raw_files, _doc_id(user_id, subject_id, slide_id))
+    delete_doc(COLL.raw_files, _doc_id(user_id, subject_id, file_id))
 
-    # Remove disk cache if present
+    # Delete from Firebase Storage if present
+    storage_path = row.get("storage_path")
+    if storage_path:
+        try:
+            delete_file_from_storage(storage_path)
+        except Exception as e:
+            print(f"[delete_file] Error deleting from storage: {e}", flush=True)
+
+    # Remove disk cache if present (legacy files)
     file_type = row.get("file_type", "pdf")
-    disk_path = _FILES_DIR / f"{slide_id}.{file_type}"
+    disk_path = _FILES_DIR / f"{file_id}.{file_type}"
     if disk_path.exists():
         disk_path.unlink()
 
 
-@router.post("/quiz/generate", response_model=QuestionResponse)
-def generate_quiz(
+@router.post("/questions", response_model=QuestionResponse)
+def generate_question(
     payload: GenerateQuizRequest,
 ):
+    """Generate a new quiz question from chunk text."""
     try:
         user_id = payload.user_id
         subject_id = payload.subject_id
@@ -352,10 +393,11 @@ def generate_quiz(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@router.post("/quiz/answer", response_model=AttemptResponse)
-def answer_quiz(
+@router.post("/attempts", response_model=AttemptResponse)
+def submit_attempt(
     payload: SubmitAnswerRequest,
 ):
+    """Submit and grade a quiz answer attempt."""
     user_id = payload.user_id
     subject_id = payload.subject_id
     question = get_past_quiz_by_id(payload.question_id)

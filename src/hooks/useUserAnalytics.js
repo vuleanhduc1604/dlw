@@ -51,7 +51,7 @@ export function useUserAnalytics(userId = 'default_user', subjectId = 'default_s
       setError(null);
       try {
         const [filesRes, questionsRes, attemptsRes] = await Promise.all([
-          fetch(`${API_BASE}/slides${qs}`).then(safeJson),
+          fetch(`${API_BASE}/files${qs}`).then(safeJson),
           fetch(`${API_BASE}/questions${qs}`).then(safeJson),
           fetch(`${API_BASE}/attempts${qs}`).then(safeJson),
         ]);
