@@ -36,7 +36,6 @@ from firebase_admin import credentials, firestore, storage
 # Load .env relative to this file (backend/.env)
 load_dotenv(Path(__file__).parent / ".env")
 
-
 Filter = Tuple[str, str, Any]  # (field, op, value)
 
 
@@ -98,9 +97,9 @@ def get_storage_bucket():
 
 
 def upload_file_to_storage(
-    file_bytes: bytes,
-    storage_path: str,
-    content_type: str = "application/pdf",
+        file_bytes: bytes,
+        storage_path: str,
+        content_type: str = "application/pdf",
 ) -> str:
     """
     Upload a file to Firebase Storage.
@@ -185,10 +184,10 @@ def delete_doc(collection: str, doc_id: str) -> None:
 
 
 def query_docs(
-    collection: str,
-    *,
-    filters: Sequence[Filter] = (),
-    limit_n: int | None = None,
+        collection: str,
+        *,
+        filters: Sequence[Filter] = (),
+        limit_n: int | None = None,
 ) -> list[dict[str, Any]]:
     q: Any = db().collection(collection)
     for field, op, value in filters:
@@ -209,18 +208,18 @@ def query_docs(
 # ----------------------------
 
 def upsert_raw_file(
-    *,
-    user_id: str,
-    subject_id: str,
-    file_id: str,
-    file: Any,
-    filename: str | None = None,
-    file_type: str | None = None,
-    raw_text: str | None = None,
-    sections: list[dict[str, Any]] | None = None,
-    created_at: str | None = None,
-    file_url: str | None = None,
-    storage_path: str | None = None,
+        *,
+        user_id: str,
+        subject_id: str,
+        file_id: str,
+        file: Any,
+        filename: str | None = None,
+        file_type: str | None = None,
+        raw_text: str | None = None,
+        sections: list[dict[str, Any]] | None = None,
+        created_at: str | None = None,
+        file_url: str | None = None,
+        storage_path: str | None = None,
 ) -> str:
     payload: dict[str, Any] = {
         "user_id": user_id,
@@ -256,12 +255,12 @@ def get_raw_file(*, user_id: str, subject_id: str, file_id: str) -> Optional[dic
 # --------------------------------
 
 def upsert_processed_slide(
-    *,
-    user_id: str,
-    subject_id: str,
-    file_id: str,
-    slide_id: str,
-    slides_content: str,
+        *,
+        user_id: str,
+        subject_id: str,
+        file_id: str,
+        slide_id: str,
+        slides_content: str,
 ) -> str:
     doc_id = _doc_id(user_id, subject_id, file_id, slide_id)
     return upsert_doc(
@@ -278,11 +277,11 @@ def upsert_processed_slide(
 
 
 def list_processed_slides(
-    *,
-    user_id: str,
-    subject_id: str,
-    file_id: str,
-    limit_n: int = 2000,
+        *,
+        user_id: str,
+        subject_id: str,
+        file_id: str,
+        limit_n: int = 2000,
 ) -> list[dict[str, Any]]:
     return query_docs(
         COLL.processed_slides,
@@ -300,17 +299,16 @@ def list_processed_slides(
 # -------------------------
 
 def upsert_chunk(
-    *,
-    user_id: str,
-    subject_id: str,
-    file_id: str,
-    chunk_id: str,
-    chunk_begin: int,
-    chunk_end: int,
-    chunk_summary: str,
-    filename: str | None = None,
-    raw_text: str | None = None,
-    created_at: str | None = None,
+        *,
+        user_id: str,
+        subject_id: str,
+        file_id: str,
+        chunk_id: str,
+        chunk_begin: int,
+        chunk_end: int,
+        chunk_summary: str,
+        filename: str | None = None,
+        created_at: str | None = None,
 ) -> str:
     payload: dict[str, Any] = {
         "user_id": user_id,
@@ -323,8 +321,6 @@ def upsert_chunk(
     }
     if filename is not None:
         payload["filename"] = filename
-    if raw_text is not None:
-        payload["raw_text"] = raw_text
     if created_at is not None:
         payload["created_at"] = created_at
 
@@ -333,11 +329,11 @@ def upsert_chunk(
 
 
 def list_chunks(
-    *,
-    user_id: str,
-    subject_id: str,
-    file_id: str,
-    limit_n: int = 2000,
+        *,
+        user_id: str,
+        subject_id: str,
+        file_id: str,
+        limit_n: int = 2000,
 ) -> list[dict[str, Any]]:
     return query_docs(
         COLL.chunks,
@@ -348,6 +344,11 @@ def list_chunks(
         ),
         limit_n=limit_n,
     )
+
+
+def get_chunk(*, user_id: str, subject_id: str, file_id: str, chunk_id: str) -> Optional[dict[str, Any]]:
+    doc_id = _doc_id(user_id, subject_id, file_id, chunk_id)
+    return get_doc(COLL.chunks, doc_id)
 
 
 # ----------------------------
@@ -392,11 +393,12 @@ def add_past_quiz(
 
     return add_doc(COLL.past_quiz, data)
 
+
 def list_past_quiz(
-    *,
-    user_id: str,
-    subject_id: str,
-    limit_n: int = 500,
+        *,
+        user_id: str,
+        subject_id: str,
+        limit_n: int = 500,
 ) -> list[dict[str, Any]]:
     return query_docs(
         COLL.past_quiz,
@@ -413,19 +415,19 @@ def get_past_quiz_by_id(question_id: str) -> Optional[dict[str, Any]]:
 
 
 def upsert_attempt(
-    *,
-    attempt_id: str,
-    user_id: str,
-    subject_id: str,
-    question_id: str,
-    file_id: str | None,
-    question_text: str,
-    options: list[str],
-    answer: str,
-    user_answer: str,
-    score: int,
-    question_type: str,
-    attempted_at: str,
+        *,
+        attempt_id: str,
+        user_id: str,
+        subject_id: str,
+        question_id: str,
+        file_id: str | None,
+        question_text: str,
+        options: list[str],
+        answer: str,
+        user_answer: str,
+        score: int,
+        question_type: str,
+        attempted_at: str,
 ) -> str:
     payload = {
         "attempt_id": attempt_id,
@@ -445,10 +447,10 @@ def upsert_attempt(
 
 
 def list_attempts(
-    *,
-    user_id: str,
-    subject_id: str,
-    limit_n: int = 500,
+        *,
+        user_id: str,
+        subject_id: str,
+        limit_n: int = 500,
 ) -> list[dict[str, Any]]:
     return query_docs(
         COLL.attempts,
@@ -465,11 +467,11 @@ def list_attempts(
 # ----------------------------------
 
 def upsert_user_subject_metadata(
-    *,
-    user_id: str,
-    subject_id: str,
-    custom_upload_prompt: str,
-    custom_quiz_gen_prompt: str,
+        *,
+        user_id: str,
+        subject_id: str,
+        custom_upload_prompt: str,
+        custom_quiz_gen_prompt: str,
 ) -> str:
     doc_id = _doc_id(user_id, subject_id)
     return upsert_doc(
@@ -485,11 +487,12 @@ def upsert_user_subject_metadata(
 
 
 def get_user_subject_metadata(
-    *,
-    user_id: str,
-    subject_id: str,
+        *,
+        user_id: str,
+        subject_id: str,
 ) -> Optional[dict[str, Any]]:
     return get_doc(COLL.user_subject_metadata, _doc_id(user_id, subject_id))
+
 
 def get_next_file_index(
         user_id: str,

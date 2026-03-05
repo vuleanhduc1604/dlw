@@ -153,7 +153,7 @@ def generate_quiz_modular(
     Sends a chunk to AI and returns a parsed quiz question.
     Retries if required tokens are missing.
     """
-
+    print(chunk_text[:500])
     prompt = build_quiz_prompt(chunk_text, topic_type, format_type)
     # print(f"Prompt: \n{prompt}")
     for attempt in range(max_retries):

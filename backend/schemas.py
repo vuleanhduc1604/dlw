@@ -20,16 +20,18 @@ class SectionSchema(BaseModel):
 
 
 class GenerateQuizRequest(BaseModel):
-    """POST /quiz/generate - generate one question from a chunk of text."""
+    """POST /questions - generate one question from slide range."""
 
-    chunk_text: str = Field(min_length=1)
-    file_id: Optional[str] = None
-    chunk_id: Optional[str] = None
-    topic_type: str = "Theory"  # "Theory" | "Applied"
-    format_type: str = "MCQ"  # "MCQ" | "TEXT"
+    file_id: str
+    chunk_id: str
+    chunk_begin: int
+    chunk_end: int
+    topic_type: str = "Theory"
+    format_type: str = "MCQ"
     model_name: str = DEFAULT_MODEL_NAME
     user_id: str = "default_user"
     subject_id: str = "default_subject"
+
 
 
 class SubmitAnswerRequest(BaseModel):

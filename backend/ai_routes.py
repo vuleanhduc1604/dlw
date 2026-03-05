@@ -34,7 +34,7 @@ from .firebase_utils import (
     _doc_id,
     upload_file_to_storage,
     download_file_from_storage,
-    delete_file_from_storage,
+    delete_file_from_storage, get_chunk,
 )
 from .schemas import (
     AnalyticsSummary,
@@ -92,9 +92,9 @@ def fetch_file(*, user_id: str, subject_id: str, file_id: str) -> dict | None:
 
 @router.post("/files", response_model=FileUploadResponse)
 async def upload_file(
-    user_id: str = Form(default="default_user"),
-    subject_id: str = Form(default="default_subject"),
-    file: UploadFile = File(...),
+        user_id: str = Form(default="default_user"),
+        subject_id: str = Form(default="default_subject"),
+        file: UploadFile = File(...),
 ):
     stage = "start"
     try:
@@ -154,7 +154,6 @@ async def upload_file(
             chunk_end = _safe_int(token.get("CHUNKEND"), chunk_begin)
             chunk_begin = max(1, min(chunk_begin, max_section_id))
             chunk_end = max(chunk_begin, min(chunk_end, max_section_id))
-            chunk_text = _build_chunk_text(processed["sections"], chunk_begin, chunk_end)
             summary = generate_summary(chunk_text) if chunk_text else ""
 
             stage = "upsert_chunk"
@@ -171,7 +170,6 @@ async def upload_file(
                 chunk_end=chunk_end,
                 chunk_summary=summary,
                 filename=processed["filename"],
-                raw_text=chunk_text,
                 created_at=created_at,
             )
 
@@ -211,8 +209,8 @@ async def upload_file(
 
 @router.get("/files", response_model=list[FileSummary])
 def get_all_files(
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     rows = query_docs(
         COLL.raw_files,
@@ -231,9 +229,9 @@ def get_all_files(
 
 @router.get("/files/{file_id}", response_model=FileDetail)
 def get_file(
-    file_id: str,
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        file_id: str,
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
     if not row:
@@ -263,9 +261,9 @@ def get_file(
 
 @router.get("/files/{file_id}/download")
 def download_file(
-    file_id: str,
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        file_id: str,
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     """Download the original uploaded file."""
     row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
@@ -313,9 +311,9 @@ def download_file(
 
 @router.delete("/files/{file_id}", status_code=204)
 def delete_file(
-    file_id: str,
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        file_id: str,
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     """Delete a file and all its chunks."""
     row = get_raw_file(user_id=user_id, subject_id=subject_id, file_id=file_id)
@@ -349,18 +347,43 @@ def delete_file(
 
 @router.post("/questions", response_model=QuestionResponse)
 def generate_question(
-    payload: GenerateQuizRequest,
+        payload: GenerateQuizRequest,
 ):
-    """Generate a new quiz question from chunk text."""
+    """Generate a new quiz question from chunk range."""
     try:
         user_id = payload.user_id
         subject_id = payload.subject_id
+
+        # Fetch chunk from Firestore
+        chunk = get_chunk(
+            user_id=user_id,
+            subject_id=subject_id,
+            file_id=payload.file_id,
+            chunk_id=payload.chunk_id,
+        )
+        if not chunk:
+            raise HTTPException(status_code=404, detail="Chunk not found.")
+
+        begin = chunk.get("chunk_begin")
+        end = chunk.get("chunk_end")
+
+        raw_file = get_raw_file(
+            user_id=user_id,
+            subject_id=subject_id,
+            file_id=payload.file_id,
+        )
+        if not raw_file or not raw_file.get("sections"):
+            raise HTTPException(status_code=404, detail="Raw file not found.")
+
+        chunk_text = f"Slides {begin}–{end}:\n{_build_chunk_text(raw_file['sections'], begin, end)}"
+
         raw = generate_quiz_modular(
-            payload.chunk_text,
+            chunk_text,
             payload.topic_type,
             payload.format_type,
             payload.model_name,
         )
+
         question_id = str(uuid4())
         created_at = _utc_now_iso()
 
@@ -390,12 +413,13 @@ def generate_question(
             ),
         )
     except Exception as exc:
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/attempts", response_model=AttemptResponse)
 def submit_attempt(
-    payload: SubmitAnswerRequest,
+        payload: SubmitAnswerRequest,
 ):
     """Submit and grade a quiz answer attempt."""
     user_id = payload.user_id
@@ -454,8 +478,8 @@ def get_question_detail(question_id: str):
 
 @router.get("/questions", response_model=list[QuestionDetail])
 def get_all_questions(
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     rows = query_docs(
         COLL.past_quiz,
@@ -480,8 +504,8 @@ def get_all_questions(
 
 @router.get("/attempts", response_model=list[AttemptDetail])
 def get_attempts(
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     rows = list_attempts(user_id=user_id, subject_id=subject_id)
     return [
@@ -503,8 +527,8 @@ def get_attempts(
 
 @router.get("/analytics", response_model=AnalyticsSummary)
 def get_analytics(
-    user_id: str = Query(default="default_user"),
-    subject_id: str = Query(default="default_subject"),
+        user_id: str = Query(default="default_user"),
+        subject_id: str = Query(default="default_subject"),
 ):
     attempts = list_attempts(user_id=user_id, subject_id=subject_id)
     questions = query_docs(

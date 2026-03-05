@@ -1,12 +1,12 @@
 import asyncio
 from io import BytesIO
 
+from dotenv import load_dotenv
 from fastapi import UploadFile
 
-from ai_service import generate_quiz_modular, generate_chunks, parse_metadata, parse_sections
+from firebase_utils import query_docs, COLL
 from model_config import DEFAULT_MODEL_NAME
 from document_processor import process_uploaded_file
-
 
 class FakeUploadFile(UploadFile):
     """
@@ -100,10 +100,9 @@ async def test_quiz_generation(file_path: str):
     print("Answer:", quiz["answer"])
     print("Metadata:", quiz["metadata"])
 
-if __name__ == "__main__":
-    import asyncio
+from firebase_utils import query_docs, init_firebase_admin, COLL
 
-    file_path = "./.test/01_w1_Data_Science_Overview.pdf"  # your file
-    # asyncio.run(test_file_processing(file_path))
-    # asyncio.run(test_chunk_generation(file_path))
-    asyncio.run(test_quiz_generation(file_path))
+load_dotenv()
+init_firebase_admin()
+docs = query_docs(COLL.processed_slides, filters=[])
+print(docs[0] if docs else "empty")
