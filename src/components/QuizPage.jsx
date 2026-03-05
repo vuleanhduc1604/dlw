@@ -37,6 +37,12 @@ function formatTime(secs) {
   return `${m}:${s}`;
 }
 
+const getQ = (questions, current) => {
+  const q = questions[current];
+  console.log('[QuizPage] current question:', q);
+  return q;
+};
+
 function openSlideViewer(question, userId = 'default_user', subjectId = 'default_subject') {
   const { fileId, slideNums, slideText, reference } = question;
 
@@ -239,7 +245,7 @@ export default function QuizPage({ quizMeta, settings, questions, onExit, userId
     onExit();
   };
 
-  const q = questions[current];
+  const q = getQ(questions, current);
   const total = questions.length;
   const answered = Object.keys(userAnswers).length;
   const pct = total > 0 ? Math.round((answered / total) * 100) : 0;

@@ -74,18 +74,26 @@ export default function QuizSettings({ session, userId = 'default_user' }) {
       //   return "MCQ";
       // };
 
+      const shuffleArray = (arr) => [...arr].sort(() => Math.random() - 0.5);
+
+      const shuffledFiles = shuffleArray(sessionFiles);
+      const shuffledTypes = shuffleArray(validTypes);
+      const shuffledChunksMap = Object.fromEntries(
+          sessionFiles.map(f => [f.fileId, shuffleArray(f.chunks)])
+      );
+
       const promises = Array.from({ length: numQuestions }, (_, i) => {
-        const fileObj = sessionFiles[i % sessionFiles.length];
-        const settingsType = validTypes[i % validTypes.length];
-        // const apiFormat = toApiFormat(settingsType);
-        // Cycle through available chunks for this file and pass chunk payload expected by backend.
-        const chunk = fileObj.chunks.length > 0 ? fileObj.chunks[i % fileObj.chunks.length] : null;
+        const fileObj = shuffledFiles[i % shuffledFiles.length];
+        const settingsType = shuffledTypes[i % shuffledTypes.length];
+        const shuffledChunks = shuffledChunksMap[fileObj.fileId];
+        const chunk = shuffledChunks.length > 0 ? shuffledChunks[i % shuffledChunks.length] : null;
+
         return generateQuestion(fileObj.fileId, chunk, "Theory", settingsType, userId, String(session?.id ?? 'default_subject'))
-          .then((res) => mapApiQuestion(res, settingsType, fileObj.filename, chunk, fileObj.fileId))
-          .catch((err) => {
-            console.error("Question generation failed:", err);
-            return null;
-          });
+            .then((res) => mapApiQuestion(res, settingsType, fileObj.filename, chunk, fileObj.fileId))
+            .catch((err) => {
+              console.error("Question generation failed:", err);
+              return null;
+            });
       });
 
       const resolved = await Promise.all(promises);
