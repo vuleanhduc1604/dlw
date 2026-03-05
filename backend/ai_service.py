@@ -3,7 +3,7 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, Tuple
 from openai import OpenAI
-from .prompts import build_chunk_request, build_quiz_prompt, build_grade_prompt
+from .prompts import build_chunk_request, build_quiz_prompt, build_grade_prompt, build_summarize_prompt
 from .model_config import DEFAULT_MODEL_NAME
 from dotenv import load_dotenv
 
@@ -94,6 +94,7 @@ def parse_metadata(section_text: str) -> Tuple[Dict[str, Any], str]:
 def generate_chunks(
         slides_text: str,
         file_name: str,
+        context: str = '',
         model_name: str = DEFAULT_MODEL_NAME,
         max_retries: int = 10,
 ):
@@ -102,7 +103,7 @@ def generate_chunks(
     Retries if CHUNK tokens are missing.
     """
 
-    prompt = build_chunk_request(slides_text, file_name)
+    prompt = build_chunk_request(slides_text, file_name, context.strip())
 
     for attempt in range(max_retries):
         response = call_openai_model(
@@ -122,17 +123,11 @@ def generate_chunks(
     )
 
 
-def generate_summary(chunk_text: str, model_name: str = DEFAULT_MODEL_NAME) -> str:
+def generate_summary(chunk_text: str, context: str = '',model_name: str = DEFAULT_MODEL_NAME) -> str:
     """
     Sends a chunk of text to AI and returns a short summary string.
     """
-    prompt = f"""
-You are an AI assistant. Summarize the following chunk of slides/text in 3-5 concise sentences.
-Just return plain text. Summary only, do not say anything else.
-
-Chunk content:
-{chunk_text}
-"""
+    prompt = build_summarize_prompt(chunk_text, context)
 
     response = call_openai_model(
         client=get_openai_client(),
@@ -149,6 +144,7 @@ def generate_quiz_modular(
         topic_type: str = "Theory",
         format_type: str = "MCQ",
         difficulty: str = "Medium",
+        context: str = '',
         model_name: str = DEFAULT_MODEL_NAME,
         max_retries: int = 10,
 ):
@@ -157,7 +153,7 @@ def generate_quiz_modular(
     Retries if required tokens are missing.
     """
     # print(chunk_text[:500])
-    prompt = build_quiz_prompt(chunk_text, topic_type, format_type, difficulty)
+    prompt = build_quiz_prompt(chunk_text, topic_type, format_type, difficulty, context)
     print(f"Prompt: \n{prompt}")
     for attempt in range(max_retries):
         response = call_openai_model(

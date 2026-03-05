@@ -113,7 +113,7 @@ export default function QuizSettings({session, userId = 'default_user'}) {
                 const settingsType = validTypes[Math.floor(Math.random() * validTypes.length)];
                 const settingsScope = validScopes[Math.floor(Math.random() * validScopes.length)];
 
-                return generateQuestion(fileObj.fileId, chunk, settingsScope, settingsType, getDifficulty(difficulty), userId, String(session?.id ?? 'default_subject'))
+                return generateQuestion(fileObj.fileId, chunk, settingsScope, settingsType, getDifficulty(difficulty), session?.context ?? '', userId, String(session?.id ?? 'default_subject'))
                     .then((res) => mapApiQuestion(res, settingsType, fileObj.filename, chunk, fileObj.fileId))
                     .catch((err) => {
                         console.error("Question generation failed:", err);

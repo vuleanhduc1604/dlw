@@ -1,34 +1,45 @@
-import React, { useState, useRef } from 'react'
+import React, {useState, useRef} from 'react'
 import '../styles/UploadPage.css'
-import { Upload, X, FileText, Image as ImageIcon, CheckCircle, AlertCircle, Loader, Trash2 } from 'lucide-react';
-import { uploadSlides } from '../utils/api';
+import {Upload, X, FileText, Image as ImageIcon, CheckCircle, AlertCircle, Loader, Trash2} from 'lucide-react';
+import {uploadSlides} from '../utils/api';
 import LoadingModal from './LoadingModal';
 
 function SkeletonQuestionCard() {
-  return (
-    <div className="sk-card">
-      <div className="sk-card-meta">
-        <div className="sk-block sk-badge" />
-        <div className="sk-block sk-counter" />
-      </div>
-      <div className="sk-block sk-line sk-line-lg" />
-      <div className="sk-block sk-line sk-line-md" />
-      <div className="sk-options">
-        <div className="sk-block sk-option" />
-        <div className="sk-block sk-option" />
-        <div className="sk-block sk-option" />
-        <div className="sk-block sk-option" />
-      </div>
-    </div>
-  );
+    return (
+        <div className="sk-card">
+            <div className="sk-card-meta">
+                <div className="sk-block sk-badge"/>
+                <div className="sk-block sk-counter"/>
+            </div>
+            <div className="sk-block sk-line sk-line-lg"/>
+            <div className="sk-block sk-line sk-line-md"/>
+            <div className="sk-options">
+                <div className="sk-block sk-option"/>
+                <div className="sk-block sk-option"/>
+                <div className="sk-block sk-option"/>
+                <div className="sk-block sk-option"/>
+            </div>
+        </div>
+    );
 }
 
-function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', subjectId = null, sessionFiles = [], onDeleteFile }) {
+function UploadPage({
+                        onUploadComplete,
+                        isInSession,
+                        userId = 'default_user',
+                        subjectId = null,
+                        sessionFiles = [],
+                        onDeleteFile,
+                        sessionContext = '',
+                        onUpdateContext,
+                    }) {
     const [files, setFiles] = useState([]);
     const [dragActive, setDragActive] = useState(false);
     const [quizTitle, setQuizTitle] = useState('');
-    const [quizContext, setQuizContext] = useState('');
+    const [quizContext, setQuizContext] = useState(sessionContext);
     const fileInputRef = useRef(null);
+    const [submittedOnce, setSubmittedOnce] = useState(false);
+
     const canCreateSession = () => {
         const hasTitle = isInSession || quizTitle.trim().length > 0;
         const hasFiles = files.length > 0;
@@ -50,7 +61,9 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
     };
 
     const handleCreateSession = () => {
+        setSubmittedOnce(true);
         if (!canCreateSession()) return;
+        setSubmittedOnce(false);
 
         const title = isInSession ? null : quizTitle;
         const fileCount = files.length;
@@ -63,7 +76,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
             setQuizTitle('');
             setQuizContext('');
             if (onUploadComplete) {
-                onUploadComplete(title, fileCount, apiData, resolvedSubjectId);
+                onUploadComplete(title, fileCount, apiData, resolvedSubjectId, quizContext);
             }
         });
     };
@@ -132,47 +145,47 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
 
         for (let fileObj of filesToUpload) {
             setFiles(prev => prev.map(f =>
-                f.id === fileObj.id ? { ...f, status: 'uploading', progress: 0 } : f
+                f.id === fileObj.id ? {...f, status: 'uploading', progress: 0} : f
             ));
 
             try {
-                const apiData = await uploadSlides(fileObj.file, userId, resolvedSubjectId);
+                const apiData = await uploadSlides(fileObj.file, quizContext, userId, resolvedSubjectId);
 
                 uploadedFiles.push({
-                    fileId: apiData.slide_id,
+                    fileId: apiData.file_id,
                     filename: fileObj.name,
                     chunks: apiData.chunks || [],
                 });
 
                 setFiles(prev => prev.map(f =>
-                    f.id === fileObj.id ? { ...f, status: 'success', progress: 100 } : f
+                    f.id === fileObj.id ? {...f, status: 'success', progress: 100} : f
                 ));
             } catch (error) {
                 console.error('Upload error:', error);
                 setFiles(prev => prev.map(f =>
-                    f.id === fileObj.id ? { ...f, status: 'error' } : f
+                    f.id === fileObj.id ? {...f, status: 'error'} : f
                 ));
             }
         }
 
-        return { files: uploadedFiles };
+        return {files: uploadedFiles};
     };
 
     const getFileIcon = (type) => {
         if (type === 'application/pdf') {
-            return <FileText size={24} />;
+            return <FileText size={24}/>;
         }
-        return <FileText size={24} />;
+        return <FileText size={24}/>;
     };
 
     const getStatusIcon = (status) => {
         switch (status) {
             case 'uploading':
-                return <Loader className="spinner" size={20} />;
+                return <Loader className="spinner" size={20}/>;
             case 'success':
-                return <CheckCircle size={20} className="success-icon" />;
+                return <CheckCircle size={20} className="success-icon"/>;
             case 'error':
-                return <AlertCircle size={20} className="error-icon" />;
+                return <AlertCircle size={20} className="error-icon"/>;
             default:
                 return null;
         }
@@ -180,7 +193,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
     return (
         <div className="content-area">
             {files.some(f => f.status === 'uploading') && (
-                <LoadingModal message="Uploading and processing files…" />
+                <LoadingModal message="Uploading and processing files…"/>
             )}
             <div className="upload-section">
                 {!isInSession && (
@@ -194,6 +207,23 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                         <h2>Add More Files</h2>
                         <p className="subtitle">Additional files will be included in future quiz generation</p>
                     </>
+                )}
+
+                {isInSession && (
+                    <div className="input-section">
+                        <div className="input-group">
+                            <label htmlFor="quiz-context">Additional Context</label>
+                            <textarea
+                                id="quiz-context"
+                                value={quizContext}
+                                onChange={(e) => setQuizContext(e.target.value)}
+                                onBlur={() => onUpdateContext?.(quizContext)}
+                                placeholder="Provide context to help generate better questions…"
+                                className="context-input"
+                                rows="3"
+                            />
+                        </div>
+                    </div>
                 )}
 
                 {/* Input Fields — only shown when not in a session */}
@@ -237,7 +267,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                             {sessionFiles.map((f) => (
                                 <div key={f.fileId} className="file-item session-file-saved">
                                     <div className="file-preview">
-                                        <FileText size={24} />
+                                        <FileText size={24}/>
                                     </div>
                                     <div className="file-info">
                                         <div className="file-name">{f.filename}</div>
@@ -252,10 +282,10 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                                                 onClick={() => onDeleteFile(f.fileId)}
                                                 title="Remove file"
                                             >
-                                                <Trash2 size={16} />
+                                                <Trash2 size={16}/>
                                             </button>
                                         ) : (
-                                            <CheckCircle size={20} className="success-icon" />
+                                            <CheckCircle size={20} className="success-icon"/>
                                         )}
                                     </div>
                                 </div>
@@ -273,7 +303,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                     onDrop={handleDrop}
                     onClick={() => fileInputRef.current?.click()}
                 >
-                    <Upload size={48} className="upload-icon" />
+                    <Upload size={48} className="upload-icon"/>
                     <h3>Drag & drop lecture slides / notes here <span style={{
                         color: "red"
                     }}>*</span></h3>
@@ -285,7 +315,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                         multiple
                         accept=".pdf"
                         onChange={handleFileInput}
-                        style={{ display: 'none' }}
+                        style={{display: 'none'}}
                     />
                 </div>
 
@@ -299,7 +329,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                                 <div key={fileObj.id} className={`file-item ${fileObj.status}`}>
                                     <div className="file-preview">
                                         {fileObj.preview ? (
-                                            <img src={fileObj.preview} alt={fileObj.name} />
+                                            <img src={fileObj.preview} alt={fileObj.name}/>
                                         ) : (
                                             getFileIcon(fileObj.type)
                                         )}
@@ -317,7 +347,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                                             <div className="progress-bar">
                                                 <div
                                                     className="progress-fill"
-                                                    style={{ width: `${fileObj.progress}%` }}
+                                                    style={{width: `${fileObj.progress}%`}}
                                                 ></div>
                                             </div>
                                         )}
@@ -330,7 +360,7 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
                                                 className="remove-button"
                                                 onClick={() => removeFile(fileObj.id)}
                                             >
-                                                <X size={20} />
+                                                <X size={20}/>
                                             </button>
                                         )}
                                     </div>
@@ -345,27 +375,29 @@ function UploadPage({ onUploadComplete, isInSession, userId = 'default_user', su
             {files.some(f => f.status === 'uploading') && (
                 <div className="sk-preview-section">
                     <div className="sk-preview-header">
-                        <Loader className="spinner" size={16} />
+                        <Loader className="spinner" size={16}/>
                         <span>Building your questions…</span>
                     </div>
                     <div className="sk-preview-grid">
-                        <SkeletonQuestionCard />
-                        <SkeletonQuestionCard />
-                        <SkeletonQuestionCard />
+                        <SkeletonQuestionCard/>
+                        <SkeletonQuestionCard/>
+                        <SkeletonQuestionCard/>
                     </div>
                 </div>
             )}
 
             {/* Create Session Button */}
             <div className="create-section">
-                <button
-                    className="create-button"
-                    onClick={handleCreateSession}
-                    disabled={!canCreateSession()}
-                >
-                    {isInSession ? 'Add Files to Session' : 'Create Quiz Session'}
-                </button>
-                {!canCreateSession() && (
+                <div title={!canCreateSession() ? getValidationMessage() : ''}>
+                    <button
+                        className="create-button"
+                        onClick={handleCreateSession}
+                        disabled={!canCreateSession()}
+                    >
+                        {isInSession ? 'Add Files to Subject' : 'Create Subject'}
+                    </button>
+                </div>
+                {submittedOnce && !canCreateSession() && (
                     <p className="validation-message">
                         {getValidationMessage()}
                     </p>

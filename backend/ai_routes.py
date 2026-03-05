@@ -94,6 +94,7 @@ def fetch_file(*, user_id: str, subject_id: str, file_id: str) -> dict | None:
 async def upload_file(
         user_id: str = Form(default="default_user"),
         subject_id: str = Form(default="default_subject"),
+        slides_context: str = '',
         file: UploadFile = File(...),
 ):
     stage = "start"
@@ -142,7 +143,7 @@ async def upload_file(
         slides_text = "\n\n".join(
             f"Slide {sec['section_id']}:\n{sec['content']}" for sec in processed["sections"]
         )
-        chunk_tokens = generate_chunks(slides_text, file_name=processed["filename"])
+        chunk_tokens = generate_chunks(slides_text, file_name=processed["filename"], context=slides_context)
 
         chunks: list[ChunkResponse] = []
         max_section_id = max((int(sec.get("section_id", 0)) for sec in processed["sections"]), default=1)
@@ -153,7 +154,7 @@ async def upload_file(
             chunk_end = _safe_int(token.get("CHUNKEND"), chunk_begin)
             chunk_begin = max(1, min(chunk_begin, max_section_id))
             chunk_end = max(chunk_begin, min(chunk_end, max_section_id))
-            summary = generate_summary(slides_text) if slides_text else ""
+            summary = generate_summary(slides_text, slides_context) if slides_text else ""
 
             stage = "upsert_chunk"
             print(
@@ -189,7 +190,7 @@ async def upload_file(
             flush=True,
         )
         return FileUploadResponse(
-            slide_id=file_id,
+            file_id=file_id,
             filename=processed["filename"],
             file_type=processed["file_type"],
             chunks=chunks,
@@ -380,7 +381,7 @@ def generate_question(
             payload.topic_type,
             payload.format_type,
             payload.difficulty,
-            payload.model_name,
+            payload.context,
         )
 
         question_id = str(uuid4())

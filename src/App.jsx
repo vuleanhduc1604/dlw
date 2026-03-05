@@ -85,7 +85,7 @@ const App = () => {
   const isInActiveSession = uploadSessions.length > 0 && currentSessionId !== null;
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleUploadComplete = (title, fileCount, apiData, subjectId) => {
+  const handleUploadComplete = (title, fileCount, apiData, subjectId, context) => {
     const newFiles = apiData?.files || [];
 
     if (isInActiveSession) {
@@ -110,6 +110,7 @@ const App = () => {
       date: new Date().toISOString().split('T')[0],
       fileCount,
       files: newFiles,
+      context: context || '',
     };
     setUploadSessions(prev => [newSession, ...prev]);
     setCurrentSessionId(newSession.id);
@@ -137,6 +138,14 @@ const App = () => {
     setUploadSessions(prev => prev.map(s => s.id === sessionId ? updatedSession : s));
     saveSubject(user.uid, updatedSession).catch(console.error);
     setLoadingMessage(null);
+  };
+
+  const handleUpdateContext = (context) => {
+    const session = uploadSessions.find(s => s.id === currentSessionId);
+    if (!session) return;
+    const updated = { ...session, context };
+    setUploadSessions(prev => prev.map(s => s.id === currentSessionId ? updated : s));
+    saveSubject(user.uid, updated).catch(console.error);
   };
 
   const handleDeleteSubject = async (sessionId) => {
@@ -257,6 +266,8 @@ const App = () => {
             subjectId={currentSessionId ?? null}
             sessionFiles={uploadSessions.find(s => s.id === currentSessionId)?.files ?? []}
             onDeleteFile={(fileId) => handleDeleteFile(currentSessionId, fileId)}
+            sessionContext={uploadSessions.find(s => s.id === currentSessionId)?.context ?? ''}
+            onUpdateContext={handleUpdateContext}
           />
         )}
         {activeTab === 'quiz' && (

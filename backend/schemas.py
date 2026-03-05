@@ -29,6 +29,7 @@ class GenerateQuizRequest(BaseModel):
     topic_type: str = "Theory"
     format_type: str = "MCQ"
     difficulty: str = "Medium"
+    context: str = ""
     model_name: str = DEFAULT_MODEL_NAME
     user_id: str = "default_user"
     subject_id: str = "default_subject"
@@ -61,7 +62,7 @@ class ChunkResponse(BaseModel):
 class FileUploadResponse(BaseModel):
     """Response from POST /files."""
 
-    slide_id: str  # TODO: rename to file_id for consistency
+    file_id: str
     filename: str
     file_type: str
     chunks: List[ChunkResponse]
