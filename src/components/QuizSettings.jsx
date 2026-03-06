@@ -1,7 +1,7 @@
 import React, {useState} from "react";
 import "../styles/QuizSettings.css";
 import {getAllMockQuestions, buildQuestions, QUIZ_STORAGE_KEY, QUIZ_RESULTS_KEY} from "../utils/quizData";
-import {generateQuestion, mapApiQuestion} from "../utils/api";
+import {fetchFailedQuestions, generateQuestion, mapApiQuestion} from "../utils/api";
 import LoadingModal from "./LoadingModal";
 
 const getStored = (key, fallback) => {
@@ -34,6 +34,7 @@ export default function QuizSettings({session, userId = 'default_user'}) {
     const [types, setTypes] = usePersisted(prefix + 'types', ['MCQ', 'TF', 'MULTI', 'TEXT']);
     const [scopes, setScopes] = usePersisted(prefix + 'scopes', ['Theory', 'Applied']);
     const [timerEnabled, setTimerEnabled] = usePersisted(prefix + 'timerEnabled', false);
+    const [revisitFailed, setRevisitFailed] = usePersisted(prefix + 'revisitFailed', false);
     const [timeMins, setTimeMins] = usePersisted(prefix + 'timeMins', 15);
     const [generating, setGenerating] = useState(false);
 
@@ -72,6 +73,7 @@ export default function QuizSettings({session, userId = 'default_user'}) {
             difficulty,
             types,
             scopes,
+            revisitFailed,
             timeLimitOn: timerEnabled,
             timeLimitMins: timeMins,
         };
@@ -108,7 +110,37 @@ export default function QuizSettings({session, userId = 'default_user'}) {
             const nextChunk = createBag(allChunks);
 
 
-            const promises = Array.from({length: numQuestions}, (_, i) => {
+            let revisitQuestions = [];
+            if (settings.revisitFailed) {
+                try {
+                    const res = await fetchFailedQuestions(userId, String(session?.id ?? 'default_subject'), {
+                        types: validTypes,
+                        scopes: validScopes,
+                        difficulties: difficulty === 'Mixed' ? ['Easy', 'Medium', 'Hard'] : [difficulty],
+                        limit: Math.max(1, Math.floor(numQuestions * 0.3)),
+                    });
+                    revisitQuestions = (res.questions ?? []).map(q => {
+                        const fakeApiRes = {
+                            question_id: q.question_id,
+                            raw: {
+                                question_text: q.question_text,
+                                options: q.options ?? [],
+                                answer: q.answer,
+                                metadata: q.metadata ?? {},
+                            }
+                        };
+                        return {
+                            ...mapApiQuestion(fakeApiRes, q.format_type, q.filename ?? null, null, q.file_id ?? null),
+                            isRevisit: true,
+                        };
+                    });
+                } catch (err) {
+                    console.warn('Failed to fetch revisit questions:', err);
+                }
+            }
+
+            const freshCount = numQuestions - revisitQuestions.length;
+            const promises = Array.from({length: freshCount}, (_, i) => {
                 const {chunk, fileObj} = nextChunk();
                 const settingsType = validTypes[Math.floor(Math.random() * validTypes.length)];
                 const settingsScope = validScopes[Math.floor(Math.random() * validScopes.length)];
@@ -122,7 +154,10 @@ export default function QuizSettings({session, userId = 'default_user'}) {
             });
 
             const resolved = await Promise.all(promises);
-            questions = resolved.filter(Boolean);
+            const freshQuestions = resolved.filter(Boolean);
+
+            // Shuffle revisit and fresh together
+            questions = shuffleArray([...revisitQuestions, ...freshQuestions]);
         } else {
             console.error('[QuizSettings] No session files found, session:', session);
             alert('No uploaded files found in this session. Please upload slides before starting a quiz.');
@@ -191,6 +226,23 @@ export default function QuizSettings({session, userId = 'default_user'}) {
                             onBlur={(e) => setNumQuestions(Math.max(1, Math.min(50, Number(e.target.value) || 1)))}
                         />
                         <button className="qs-stepper-btn" onClick={() => stepNum(1)}>+</button>
+                    </div>
+                </div>
+                <div className="qs-row">
+                    <div className="qs-label-wrap">
+                        <div className="qs-label">Revisit failed questions</div>
+                        <div className="qs-desc">Mix in questions you got wrong in past attempts</div>
+                    </div>
+                    <div className="qs-toggle-wrap">
+                        <label className="qs-toggle">
+                            <input
+                                type="checkbox"
+                                checked={revisitFailed}
+                                onChange={(e) => setRevisitFailed(e.target.checked)}
+                            />
+                            <span className="qs-toggle-track"></span>
+                            <span className="qs-toggle-thumb"></span>
+                        </label>
                     </div>
                 </div>
             </div>

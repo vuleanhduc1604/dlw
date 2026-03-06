@@ -150,3 +150,11 @@ class AnalyticsSummary(BaseModel):
     best_score: int
     total_questions_generated: int
     total_files_uploaded: int
+
+class FailedQuestionsRequest(BaseModel):
+    user_id: str
+    subject_id: str
+    format_types: list[str] | None = None
+    topic_types: list[str] | None = None
+    difficulties: list[str] | None = None
+    limit: int = 20

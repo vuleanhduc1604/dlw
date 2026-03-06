@@ -128,6 +128,23 @@ export async function downloadFile(fileId, userId, subjectId) {
     return URL.createObjectURL(blob);
 }
 
+export async function fetchFailedQuestions(userId, subjectId, filters = {}) {
+    const res = await fetch(`${API_BASE}/questions/failed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            user_id: userId,
+            subject_id: subjectId,
+            format_types: filters.types ?? null,
+            topic_types: filters.scopes ?? null,
+            difficulty: filters.difficulty ?? null,
+            limit: filters.limit ?? 20,
+        }),
+    });
+    if (!res.ok) throw new Error(`Fetch failed questions (${res.status})`);
+    return res.json();
+}
+
 /**
  * Convert an API quiz response into the QuizPage question format.
  *

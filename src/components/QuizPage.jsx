@@ -214,6 +214,7 @@ export default function QuizPage({
     const [quizResults, setQuizResults] = useState(null);
     const [showResults, setShowResults] = useState(false);
     const [submitting, setSubmitting] = useState(false);
+    const [isRetrying, setIsRetrying] = useState(false);
     const [secondsLeft, setSecondsLeft] = useState(
         settings.timeLimitOn ? settings.timeLimitMins * 60 : null
     );
@@ -396,6 +397,7 @@ export default function QuizPage({
         setSubmitting(false);
         setQuizResults(null);
         setShowResults(false);
+        setIsRetrying(true);
         if (settings.timeLimitOn) setSecondsLeft(settings.timeLimitMins * 60);
         panelRef.current?.scrollTo({top: 0});
     };
@@ -594,8 +596,8 @@ export default function QuizPage({
                         </div>
                     )}
                     <span className="qp-meta-tag">
-            {total} q · {settings.difficulty}
-          </span>
+                        {total} q · {settings.difficulty}{isRetrying || q.isRevisit ? ' · Revisit' : ''}
+                    </span>
                     <button className="qp-back-btn" onClick={handleExit}>← Back</button>
                 </div>
             </header>
@@ -623,7 +625,7 @@ export default function QuizPage({
               <span className={`qp-type-badge qp-type-${q.type?.toLowerCase()}`}>
                 {TYPE_LABELS[q.type]}
               </span>
-                            {q.isRevisit && (
+                            {(q.isRevisit || isRetrying) && (
                                 <span className="qp-type-badge qp-type-revisit">↩ Revisit</span>
                             )}
                             <span className="qp-q-counter">Q{current + 1} / {total}</span>

@@ -424,6 +424,7 @@ def upsert_attempt(
         answer: str,
         user_answer: str,
         score: int,
+        correct: int,
         question_type: str,
         attempted_at: str,
 ) -> str:
@@ -438,6 +439,7 @@ def upsert_attempt(
         "answer": answer,
         "user_answer": user_answer,
         "score": int(score),
+        "correct" : correct,
         "question_type": question_type,
         "attempted_at": attempted_at,
     }

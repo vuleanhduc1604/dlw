@@ -16,7 +16,7 @@ from .ai_service import (
     generate_chunks,
     generate_quiz_modular,
     generate_summary,
-    grade_nonmcq_quiz,
+    grade_nonmcq_quiz, grade_quiz,
 )
 from .document_processor import process_uploaded_file
 from .firebase_utils import (
@@ -48,7 +48,7 @@ from .schemas import (
     QuestionDetail,
     QuestionResponse,
     QuestionRaw,
-    SubmitAnswerRequest,
+    SubmitAnswerRequest, FailedQuestionsRequest,
 )
 
 router = APIRouter(tags=["core"])
@@ -398,6 +398,7 @@ def generate_question(
             "answer": raw.get("answer") or "",
             "format_type": payload.format_type,
             "topic_type": payload.topic_type,
+            "difficulty": payload.difficulty,
             "metadata": raw.get("metadata", {}),
             "created_at": created_at,
         }
@@ -417,6 +418,44 @@ def generate_question(
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post("/questions/failed")
+def get_failed_questions(payload: FailedQuestionsRequest):
+    try:
+        attempts = list_attempts(
+            user_id=payload.user_id,
+            subject_id=payload.subject_id,
+        )
+        failed = [a for a in attempts if not a.get("correct", False)]
+
+        # Deduplicate by question_id, keep most recent
+        seen = {}
+        for a in sorted(failed, key=lambda x: x.get("attempted_at", ""), reverse=True):
+            qid = a["question_id"]
+            if qid not in seen:
+                seen[qid] = a
+
+        failed_unique = list(seen.values())
+
+        # Fetch actual questions
+        questions = []
+        for attempt in failed_unique[:payload.limit * 2]:
+            q = get_past_quiz_by_id(attempt["question_id"])
+            if not q:
+                continue
+            if payload.format_types and q.get("format_type") not in payload.format_types:
+                continue
+            if payload.topic_types and q.get("topic_type") not in payload.topic_types:
+                continue
+            if payload.difficulties and q.get("difficulty") not in payload.difficulties:
+                continue
+            questions.append(q)
+            if len(questions) >= payload.limit:
+                break
+
+        return {"questions": questions}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 @router.post("/attempts", response_model=AttemptResponse)
 def submit_attempt(
         payload: SubmitAnswerRequest,
@@ -428,15 +467,16 @@ def submit_attempt(
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    if payload.question_type in {"MCQ", "TF", "MULTI"}:
-        score = 10 if payload.user_answer == question.get("answer", "") else 0
-    else:
-        score = grade_nonmcq_quiz(
-            question=question.get("question_text", ""),
-            correct_answer=question.get("answer", ""),
-            user_answer=payload.user_answer,
-            model_name=payload.model_name,
-        )
+
+    score = grade_quiz(
+        question=question.get("question_text", ""),
+        correct_answer=question.get("answer", ""),
+        question_type=question.get("format_type", "MCQ"),
+        user_answer=payload.user_answer,
+        model_name=payload.model_name,
+    )
+
+    correct = score >= 5 if question.get("format_type", "MCQ") == "TEXT" else score >= 10
 
     attempt_id = str(uuid4())
     upsert_attempt(
@@ -450,6 +490,7 @@ def submit_attempt(
         answer=question.get("answer", ""),
         user_answer=payload.user_answer,
         score=score,
+        correct=correct,
         question_type=payload.question_type,
         attempted_at=_utc_now_iso(),
     )

@@ -255,12 +255,12 @@ def grade_nonmcq_quiz(
 
 
 def grade_quiz(
-        raw_quiz_text: str,
+        question: str,
+        correct_answer: str,
         user_answer: str,
         question_type: str = "MCQ",
         model_name: str = DEFAULT_MODEL_NAME,
 ):
-    correct_answer = parse_sections(raw_quiz_text, "ANSWER", repeatable=False) or ""
 
     if question_type in {"MCQ", "TF"}:
         return grade_single_choice(correct_answer, user_answer)
@@ -269,7 +269,6 @@ def grade_quiz(
         return grade_multi_answer(correct_answer, user_answer)
 
     if question_type == "TEXT":
-        question = parse_sections(raw_quiz_text, "QUESTION", repeatable=False) or ""
         return grade_nonmcq_quiz(question, correct_answer, user_answer, model_name)
 
     raise ValueError(f"Unsupported question_type: {question_type}")
