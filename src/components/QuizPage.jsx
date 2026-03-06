@@ -459,8 +459,12 @@ export default function QuizPage({
                     {q.options.map((opt, idx) => {
                         let cls = 'qp-opt';
                         if (submitted) {
-                            if (cor.includes(idx)) cls += ' correct';
-                            else if (sel.includes(idx)) cls += ' wrong';
+                            const isSelected = sel.includes(idx);
+                            const isCorrect = cor.includes(idx);
+                            if (isSelected && isCorrect) cls += ' correct';
+                            else if (isSelected && !isCorrect) cls += ' wrong';
+                            else if (!isSelected && isCorrect) cls += ' missed';
+                            // not selected + not correct = stays default grey
                         } else if (sel.includes(idx)) cls += ' selected';
                         return (
                             <button
@@ -492,9 +496,14 @@ export default function QuizPage({
                                     setAnswer(q.id, cur.join(""));
                                 }}
                             >
-                <span className="qp-opt-check">
-                  {(sel.includes(idx) || (submitted && cor.includes(idx))) ? '✓' : ''}
-                </span>
+                    <span className="qp-opt-check">
+                      {submitted
+                          ? cor.includes(idx) && sel.includes(idx) ? '✓'
+                              : sel.includes(idx) ? '✗'
+                                  : cor.includes(idx) ? '○'
+                                      : ''
+                          : sel.includes(idx) ? '✓' : ''}
+                    </span>
                                 <span
                                     className="qp-opt-text"
                                     dangerouslySetInnerHTML={{__html: esc(opt)}}
